@@ -15,7 +15,16 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 
 ### 3. Keybindings
 - **Arrows:** Sequential verse navigation.
-- **PageUp/Down:** Chapter jumps.
+- **PageUp/Down:** Chapter jumps. PageDown at last chapter spills to next book.
 - **Shift + PageUp/Down:** Book jumps.
-- **KeyB:** Toggles Book Search mode (First-letter cycling).
-- **KeyE:** Echo Chamber (Diagnostic readout).
+- **KeyB:** Activates Book Search mode. Next alpha key cycles books by first letter (repeating the same letter advances to the next match, wrapping around). Enter/Escape/non-alpha exits.
+- **KeyC:** Activates Chapter mode. Type digits then Enter to jump to that chapter in the current book. Escape cancels.
+- **KeyV:** Activates Verse mode. Type digits then Enter to jump to that verse in the current book/chapter. Escape cancels.
+- **KeyS:** Chapter Status Report. Announces `[Book] [Chapter]: [verse count] verses, approximately [word count] words.`
+- **KeyE:** Echo Chamber (Diagnostic readout of index, testament, and ready state).
+- **Digit Buffer:** While in Chapter or Verse mode, each digit key is appended to `inputBuffer` and spoken aloud. Enter commits; Escape cancels. Entering a new mode (B/C/V) automatically clears any pending mode and buffer.
+
+### 4. Input Protocol
+- **Modal Exclusivity:** Search modes are mutually exclusive. Activating B, C, or V explicitly sets all other mode flags to `false` and clears `inputBuffer` via `clearAllModes()`. There is no state where two modes are simultaneously active.
+- **No Browser Modals:** Navigation never blocks the main thread with `prompt()` or `alert()`.
+- **Prevention:** `event.preventDefault()` is called for all navigation keys (arrows, page, mode triggers, digits, Enter within a mode) to suppress browser defaults.

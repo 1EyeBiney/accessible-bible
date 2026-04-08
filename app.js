@@ -1,6 +1,6 @@
 /**
- * Accessible Study Bible - v0.4.0
- * State-Based Book Search, Page Navigation
+ * Accessible Study Bible - v0.6.0
+ * Status Mission, Mode Safety
  */
 
 // --- Global State ---
@@ -15,6 +15,9 @@ let currentVerseIndex = 0;
 let currentBookName = '';
 let isBookSearchMode = false;
 let lastSearchLetter = '';
+let inputBuffer = '';
+let isChapterMode = false;
+let isVerseMode = false;
 let isReady = false;
 
 const announcer = document.getElementById('aria-announcer');
@@ -111,6 +114,15 @@ function readCurrentVerse() {
     speak(readString);
 }
 
+// --- Mode Safety: clear all search/input modes ---
+function clearAllModes() {
+    isBookSearchMode = false;
+    lastSearchLetter = '';
+    inputBuffer = '';
+    isChapterMode = false;
+    isVerseMode = false;
+}
+
 // --- Coordinate-Based Navigation ---
 function jumpTo(book, chapter, verse) {
     const index = memoryCache.findIndex(v =>
@@ -182,6 +194,38 @@ function handleInput(event) {
         event.preventDefault();
     }
 
+    // --- Chapter / Verse Digit Input Mode ---
+    if (isChapterMode || isVerseMode) {
+        if (/^[0-9]$/.test(key)) {
+            event.preventDefault();
+            inputBuffer += key;
+            speak(key);
+            return;
+        }
+        if (key === 'Enter') {
+            event.preventDefault();
+            const num = parseInt(inputBuffer, 10);
+            const currentChapter = memoryCache[currentVerseIndex].chapter;
+            inputBuffer = '';
+            if (isChapterMode) {
+                isChapterMode = false;
+                jumpTo(currentBookName, num, 1);
+            } else {
+                isVerseMode = false;
+                jumpTo(currentBookName, currentChapter, num);
+            }
+            return;
+        }
+        if (key === 'Escape') {
+            event.preventDefault();
+            inputBuffer = '';
+            isChapterMode = false;
+            isVerseMode = false;
+            speak("Cancelled.");
+            return;
+        }
+    }
+
     // --- Book Search Mode ---
     if (isBookSearchMode) {
         if (keyUpper === 'ENTER' || keyUpper === 'ESCAPE' || !/^[A-Z]$/.test(keyUpper)) {
@@ -235,41 +279,40 @@ function handleInput(event) {
                 speak("Beginning of library.");
             }
             break;
-        case 'E':
-            speak(`Echo Chamber active. Index ${currentVerseIndex}. Ready state: ${isReady}`);
+        case 'E': {
+            const testament = isReady ? memoryCache[currentVerseIndex].testament : 'unknown';
+            speak(`Echo Chamber active. Index ${currentVerseIndex}. Testament: ${testament}. Ready state: ${isReady}`);
             break;
+        }
         case 'B':
             event.preventDefault();
             if (!isReady) break;
+            clearAllModes();
             isBookSearchMode = true;
-            lastSearchLetter = '';
             speak("Book Search. Press a letter.");
             break;
-        case 'C': {
+        case 'C':
             event.preventDefault();
             if (!isReady) break;
-            const chapterInput = prompt("Enter Chapter");
-            if (!chapterInput) break;
-            const chapterNum = parseInt(chapterInput, 10);
-            if (isNaN(chapterNum)) {
-                speak("Invalid location.");
-                break;
-            }
-            jumpTo(currentBookName, chapterNum, 1);
+            clearAllModes();
+            isChapterMode = true;
+            speak("Chapter search. Enter numbers.");
             break;
-        }
-        case 'V': {
+        case 'V':
             event.preventDefault();
             if (!isReady) break;
-            const verseInput = prompt("Enter Verse");
-            if (!verseInput) break;
-            const verseNum = parseInt(verseInput, 10);
-            if (isNaN(verseNum)) {
-                speak("Invalid location.");
-                break;
-            }
-            const currentVerse = memoryCache[currentVerseIndex];
-            jumpTo(currentBookName, currentVerse.chapter, verseNum);
+            clearAllModes();
+            isVerseMode = true;
+            speak("Verse search. Enter numbers.");
+            break;
+        case 'S': {
+            event.preventDefault();
+            if (!isReady) break;
+            const cur = memoryCache[currentVerseIndex];
+            const chapterVerses = memoryCache.filter(v => v.book_name === cur.book_name && v.chapter === cur.chapter);
+            const verseCount = chapterVerses.length;
+            const wordCount = chapterVerses.reduce((sum, v) => sum + v.text.trim().split(/\s+/).length, 0);
+            speak(`${cur.book_name} ${cur.chapter}: ${verseCount} verses, approximately ${wordCount} words.`);
             break;
         }
     }
