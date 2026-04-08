@@ -1,6 +1,6 @@
 /**
- * Accessible Study Bible - v0.6.0
- * Status Mission, Mode Safety
+ * Accessible Study Bible - v0.9.0
+ * Context-Aware Verbosity, Tab 'Where Am I' Key
  */
 
 // --- Global State ---
@@ -19,8 +19,13 @@ let inputBuffer = '';
 let isChapterMode = false;
 let isVerseMode = false;
 let isReady = false;
+let isInitialized = false;
+let lastAnnouncedBook = '';
+let lastAnnouncedChapter = -1;
 
 const announcer = document.getElementById('aria-announcer');
+const splashScreen = document.getElementById('splash-screen');
+const focusTrap = document.getElementById('focus-trap');
 
 // --- Utility: ARIA Announcer ---
 function speak(message) {
@@ -105,13 +110,25 @@ function loadToMemory() {
 }
 
 // --- Core Navigation Logic ---
-function readCurrentVerse() {
+function readCurrentVerse(forceFull = false) {
     if (!isReady || memoryCache.length === 0) return;
-    
+
     const verseObj = memoryCache[currentVerseIndex];
     currentBookName = verseObj.book_name;
-    const readString = `${verseObj.book_name} ${verseObj.chapter} ${verseObj.verse}: ${verseObj.text}`;
-    speak(readString);
+
+    let prefix;
+    if (forceFull || verseObj.book_name !== lastAnnouncedBook) {
+        prefix = `${verseObj.book_name} chapter ${verseObj.chapter}, verse ${verseObj.verse}: `;
+    } else if (verseObj.chapter !== lastAnnouncedChapter) {
+        prefix = `Chapter ${verseObj.chapter}, verse ${verseObj.verse}: `;
+    } else {
+        prefix = `${verseObj.verse}: `;
+    }
+
+    lastAnnouncedBook = verseObj.book_name;
+    lastAnnouncedChapter = verseObj.chapter;
+
+    speak(prefix + verseObj.text);
 }
 
 // --- Mode Safety: clear all search/input modes ---
@@ -140,10 +157,23 @@ function jumpTo(book, chapter, verse) {
 
 // --- Keyboard Input Routing ---
 function handleInput(event) {
+    if (!isInitialized) {
+        if (event.key === 'Enter') {
+            document.getElementById('init-button')?.click();
+        }
+        return;
+    }
     if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return;
 
     const key = event.key;
     const keyUpper = key.toUpperCase();
+
+    // --- Tab: 'Where Am I?' ---
+    if (key === 'Tab') {
+        event.preventDefault();
+        readCurrentVerse(true);
+        return;
+    }
 
     // --- Page Navigation ---
     if (key === 'PageDown' || key === 'PageUp') {
@@ -319,6 +349,40 @@ function handleInput(event) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    initDatabase();
+    const initButton = document.getElementById('init-button');
+    const appContainer = document.getElementById('app-container');
+
+    function activateEngine() {
+        isInitialized = true;
+        splashScreen.style.display = 'none';
+        appContainer.style.display = 'block';
+        focusTrap.focus();
+        console.log("Engine Active");
+        speak("Study environment initialized. Use arrows to navigate.");
+        setTimeout(() => initDatabase(), 100);
+    }
+
+    initButton.addEventListener('click', activateEngine);
+    initButton.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            activateEngine();
+        }
+    });
+
+    initButton.addEventListener('blur', () => {
+        if (!isInitialized) {
+            requestAnimationFrame(() => initButton.focus());
+        }
+    });
+
+    setTimeout(() => speak("Press Enter to begin."), 1000);
+
+    focusTrap.addEventListener('blur', () => {
+        if (isInitialized) {
+            requestAnimationFrame(() => focusTrap.focus());
+        }
+    });
+
     window.addEventListener('keydown', handleInput);
 });
