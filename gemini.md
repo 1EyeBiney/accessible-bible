@@ -1,4 +1,4 @@
-# ACCESSIBLE BIBLE ENGINE: MASTER WATCHDOG DIRECTIVE (v0.13.0)
+# ACCESSIBLE BIBLE ENGINE: MASTER WATCHDOG DIRECTIVE (v0.15.0)
 
 ## SYSTEM INSTRUCTION:
 You are the Systems Architect for a high-performance, keyboard-centric Bible study tool. The user is a professional software instructor and requires zero-latency navigation.
@@ -17,7 +17,9 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 - `isBookSearchMode`: When true, alphabetical keys cycle through books.
 
 ### 3. Keybindings
-- **Arrows:** Sequential verse navigation.
+- **Left/Right Arrows:** Sequential verse navigation.
+- **Up Arrow:** Instant Read for margin note on the current verse.
+- **Down Arrow:** Opens the vertical Verse Menu (Edit Note, Delete Note, Copy Verse).
 - **PageUp/Down:** Chapter jumps. PageDown at last chapter spills to next book.
 - **Shift + PageUp/Down:** Book jumps.
 - **KeyB:** Activates Book Search mode. Next alpha key cycles books by first letter (repeating the same letter advances to the next match, wrapping around). Enter/Escape/non-alpha exits.
@@ -28,10 +30,16 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 - **KeyV:** Activates Verse mode. Type digits then Enter to jump to that verse in the current book/chapter. Escape cancels.
 - **Shift + V:** Cycle ambient volume (0, 5, 10, 20, 30, 40).
 - **KeyM:** Activates Memo mode. Focus moves to `#note-editor` to read/write notes for the current verse. Press Escape to save and exit.
+- **KeyR:** Anchor the current verse for relational linking.
+- **Backspace:** Breadcrumb backtrack to previous verse from the navigation history stack.
+- **Alt + L:** Drop a relational link to the anchored verse into the current verse note.
+- **Alt + J:** Follow relational link(s) from the current note. If multiple links exist, open a selection menu.
 - **KeyN:** Crossfade to next ambient track.
 - **KeyS:** Chapter Status Report. Announces `[Book] [Chapter]: [verse count] verses, approximately [word count] words.`
 - **KeyTab:** 'Where am I?' status. Forces a full readout of the current Book, Chapter, and Verse without moving the index.
 - **KeyE:** Echo Chamber (Diagnostic readout of index, testament, and ready state).
+- **Shift + E:** Export all local notes to `bible_notes_backup.json`.
+- **Shift + I:** Import local note backups from `#import-file`.
 - **Escape:** Global clear. Wipes search carousel and any pending digit buffers.
 - **Digit Buffer:** While in Chapter or Verse mode, each digit key is appended to `inputBuffer` and spoken aloud. Enter commits; Escape cancels. Entering a new mode (B/C/V) automatically clears any pending mode and buffer.
 
@@ -45,3 +53,8 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 ### 5. Data Pipeline & Upgrades
 - Data corrections require running `cleaner.js`, incrementing the emitted JSON artifact name (for example, `bsb2.json`), updating the app fetch URL, and incrementing `DB_VERSION`.
 - Database upgrades must automatically clear and recreate `TEXT_STORE` to force a network refresh of corrected scripture content, while strictly preserving `NOTES_STORE` so user annotations survive upgrades.
+
+### 6. Relational Architecture
+- **Breadcrumb Stack:** `navigationHistory` stores prior verse indexes before teleport operations so Backspace can return instantly.
+- **Anchor/Drop Workflow:** `KeyR` sets an anchor, `Alt + L` drops `[[Book Chapter:Verse]]` links, and `Alt + J` resolves those links for direct jumps.
+- **Hybrid Selection Model:** Single-link notes jump immediately; multi-link notes route through the existing menu engine for deterministic keyboard selection.

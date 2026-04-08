@@ -1,6 +1,6 @@
 /**
- * Accessible Study Bible - v0.13.0
- * Web Audio Synth Indicators, Note Presence Sonification
+ * Accessible Study Bible - v0.15.0
+ * Relational Linking, Vertical Verse Actions, Local Note Backups
  */
 
 // --- Global State ---
@@ -22,12 +22,18 @@ let isSearchMode = false;
 let isNoteMode = false;
 let searchResults = [];
 let currentSearchResultIndex = -1;
+let anchoredVerseIndex = -1;
+let navigationHistory = [];
+let isMenuMode = false;
+let menuOptions = [];
+let currentMenuIndex = 0;
 let isReady = false;
 let isInitialized = false;
 let lastAnnouncedBook = '';
 let lastAnnouncedChapter = -1;
 let searchInputEl = null;
 let noteEditorEl = null;
+let importFileEl = null;
 let audioCtx = null;
 const AUDIO_GAIN_BOOST = 1.45;
 
@@ -193,6 +199,43 @@ function readCurrentVerse(forceFull = false) {
     };
 }
 
+function openNoteEditorForCurrentVerse() {
+    if (!isReady || !db || !noteEditorEl) return;
+    clearAllModes();
+    isNoteMode = true;
+
+    const activeVerse = memoryCache[currentVerseIndex];
+    const notesTx = db.transaction([NOTES_STORE], "readonly");
+    const notesStore = notesTx.objectStore(NOTES_STORE);
+    const noteRequest = notesStore.get(activeVerse.id);
+
+    noteRequest.onsuccess = () => {
+        if (noteRequest.result) {
+            noteEditorEl.value = noteRequest.result.content;
+            speak("Edit note: " + noteRequest.result.content);
+        } else {
+            noteEditorEl.value = '';
+            speak(
+                "New note for " + activeVerse.book_name + " " + activeVerse.chapter +
+                " verse " + activeVerse.verse + ". Type and press Escape to save."
+            );
+        }
+    };
+
+    noteEditorEl.focus();
+}
+
+function parseLinkTarget(linkText) {
+    const clean = String(linkText).replace(/^\[\[/, '').replace(/\]\]$/, '').trim();
+    const match = clean.match(/^(.*)\s+(\d+):(\d+)$/);
+    if (!match) return null;
+    return {
+        book: match[1],
+        chapter: parseInt(match[2], 10),
+        verse: parseInt(match[3], 10)
+    };
+}
+
 // --- Mode Safety: clear all search/input modes ---
 function clearAllModes() {
     isBookSearchMode = false;
@@ -202,8 +245,11 @@ function clearAllModes() {
     isVerseMode = false;
     isSearchMode = false;
     isNoteMode = false;
+    isMenuMode = false;
     searchResults = [];
     currentSearchResultIndex = -1;
+    menuOptions = [];
+    currentMenuIndex = 0;
 }
 
 function getNextHymn() {
@@ -296,10 +342,90 @@ function handleInput(event) {
     const key = event.key;
     const keyUpper = key.toUpperCase();
 
+    if (isMenuMode) {
+        event.preventDefault();
+
+        if (key === 'Escape') {
+            clearAllModes();
+            speak("Menu closed");
+            return;
+        }
+
+        if (key === 'ArrowDown') {
+            currentMenuIndex = (currentMenuIndex + 1) % menuOptions.length;
+            speak((currentMenuIndex + 1) + " of " + menuOptions.length + ": " + menuOptions[currentMenuIndex]);
+            return;
+        }
+
+        if (key === 'ArrowUp') {
+            currentMenuIndex = (currentMenuIndex - 1 + menuOptions.length) % menuOptions.length;
+            speak((currentMenuIndex + 1) + " of " + menuOptions.length + ": " + menuOptions[currentMenuIndex]);
+            return;
+        }
+
+        if (key === 'Enter') {
+            const selected = menuOptions[currentMenuIndex];
+
+            if (selected === 'Edit Note') {
+                openNoteEditorForCurrentVerse();
+                return;
+            }
+
+            if (selected === 'Delete Note') {
+                const deleteTx = db.transaction([NOTES_STORE], "readwrite");
+                const deleteStore = deleteTx.objectStore(NOTES_STORE);
+                deleteStore.delete(memoryCache[currentVerseIndex].id);
+                isMenuMode = false;
+                speak("Note deleted.");
+                return;
+            }
+
+            if (selected === 'Copy Verse') {
+                navigator.clipboard.writeText(memoryCache[currentVerseIndex].text)
+                    .then(() => {
+                        isMenuMode = false;
+                        speak("Verse copied to clipboard.");
+                    })
+                    .catch(() => {
+                        isMenuMode = false;
+                        speak("Clipboard unavailable.");
+                    });
+                return;
+            }
+
+            if (/^\[\[.*\]\]$/.test(selected)) {
+                const target = parseLinkTarget(selected);
+                if (!target) {
+                    speak("Invalid link target.");
+                    return;
+                }
+                navigationHistory.push(currentVerseIndex);
+                isMenuMode = false;
+                jumpTo(target.book, target.chapter, target.verse);
+                return;
+            }
+        }
+
+        return;
+    }
+
     if (key === 'Escape') {
         clearAllModes();
         event.preventDefault();
         speak("Search and modes cleared.");
+        return;
+    }
+
+    if (key === 'Backspace') {
+        event.preventDefault();
+        if (navigationHistory.length > 0) {
+            currentVerseIndex = navigationHistory.pop();
+            readCurrentVerse();
+            playTone(600, 'sine', 0.1, 0.2);
+            speak("Returned.");
+        } else {
+            speak("No history.");
+        }
         return;
     }
 
@@ -342,6 +468,32 @@ function handleInput(event) {
     if (key === 'Tab') {
         event.preventDefault();
         readCurrentVerse(true);
+        return;
+    }
+
+    if (key === 'ArrowUp') {
+        event.preventDefault();
+        if (!isReady || !db) return;
+        const noteTx = db.transaction([NOTES_STORE], "readonly");
+        const noteStore = noteTx.objectStore(NOTES_STORE);
+        const noteRequest = noteStore.get(memoryCache[currentVerseIndex].id);
+        noteRequest.onsuccess = () => {
+            if (noteRequest.result) {
+                speak("Note: " + noteRequest.result.content);
+            } else {
+                speak("No note.");
+            }
+        };
+        return;
+    }
+
+    if (key === 'ArrowDown') {
+        event.preventDefault();
+        clearAllModes();
+        isMenuMode = true;
+        menuOptions = ['Edit Note', 'Delete Note', 'Copy Verse'];
+        currentMenuIndex = 0;
+        speak("Verse Menu. 1 of 3: Edit Note. Up and down to navigate, Enter to select, Escape to cancel.");
         return;
     }
 
@@ -487,41 +639,122 @@ function handleInput(event) {
             break;
         case 'M':
             event.preventDefault();
-            if (!isReady || !db || !noteEditorEl) break;
-            clearAllModes();
-            isNoteMode = true;
-
-            const activeVerse = memoryCache[currentVerseIndex];
-            const notesTx = db.transaction([NOTES_STORE], "readonly");
-            const notesStore = notesTx.objectStore(NOTES_STORE);
-            const noteRequest = notesStore.get(activeVerse.id);
-
-            noteRequest.onsuccess = () => {
-                if (noteRequest.result) {
-                    noteEditorEl.value = noteRequest.result.content;
-                    speak("Edit note: " + noteRequest.result.content);
-                } else {
-                    noteEditorEl.value = '';
-                    speak(
-                        "New note for " + activeVerse.book_name + " " + activeVerse.chapter +
-                        " verse " + activeVerse.verse + ". Type and press Escape to save."
-                    );
-                }
-            };
-
-            noteEditorEl.focus();
+            openNoteEditorForCurrentVerse();
             break;
         case 'E': {
+            if (event.shiftKey) {
+                event.preventDefault();
+                if (!db) {
+                    speak("Database not ready.");
+                    break;
+                }
+                const exportTx = db.transaction([NOTES_STORE], "readonly");
+                const exportStore = exportTx.objectStore(NOTES_STORE);
+                const exportRequest = exportStore.getAll();
+                exportRequest.onsuccess = () => {
+                    const blob = new Blob([JSON.stringify(exportRequest.result)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const anchor = document.createElement('a');
+                    anchor.href = url;
+                    anchor.download = 'bible_notes_backup.json';
+                    document.body.appendChild(anchor);
+                    anchor.click();
+                    document.body.removeChild(anchor);
+                    URL.revokeObjectURL(url);
+                    speak("Notes exported.");
+                };
+                break;
+            }
             const testament = isReady ? memoryCache[currentVerseIndex].testament : 'unknown';
             speak(`Echo Chamber active. Index ${currentVerseIndex}. Testament: ${testament}. Ready state: ${isReady}`);
             break;
         }
+        case 'I':
+            if (event.shiftKey) {
+                event.preventDefault();
+                if (importFileEl) {
+                    importFileEl.click();
+                }
+            }
+            break;
         case 'B':
             event.preventDefault();
             if (!isReady) break;
             clearAllModes();
             isBookSearchMode = true;
             speak("Book Search. Press a letter.");
+            break;
+        case 'R': {
+            event.preventDefault();
+            if (!isReady) break;
+            anchoredVerseIndex = currentVerseIndex;
+            const v = memoryCache[currentVerseIndex];
+            speak("Anchored " + v.book_name + " " + v.chapter + " verse " + v.verse);
+            playTone(800, 'sine', 0.1, 0.2);
+            break;
+        }
+        case 'L':
+            if (!event.altKey) break;
+            event.preventDefault();
+            if (!db || !isReady) break;
+            if (anchoredVerseIndex < 0) {
+                speak("No anchor set.");
+                break;
+            }
+            {
+                const currentVerse = memoryCache[currentVerseIndex];
+                const anchorVerse = memoryCache[anchoredVerseIndex];
+                const linkString = `[[${anchorVerse.book_name} ${anchorVerse.chapter}:${anchorVerse.verse}]]`;
+                const linkTx = db.transaction([NOTES_STORE], "readwrite");
+                const linkStore = linkTx.objectStore(NOTES_STORE);
+                const linkRequest = linkStore.get(currentVerse.id);
+                linkRequest.onsuccess = () => {
+                    if (linkRequest.result) {
+                        const existing = linkRequest.result.content || '';
+                        linkStore.put({ note_id: currentVerse.id, content: existing + "\n" + linkString });
+                    } else {
+                        linkStore.put({ note_id: currentVerse.id, content: linkString });
+                    }
+                    speak("Link appended.");
+                };
+            }
+            break;
+        case 'J':
+            if (!event.altKey) break;
+            event.preventDefault();
+            if (!db || !isReady) break;
+            {
+                const currentVerse = memoryCache[currentVerseIndex];
+                const linkTx = db.transaction([NOTES_STORE], "readonly");
+                const linkStore = linkTx.objectStore(NOTES_STORE);
+                const linkRequest = linkStore.get(currentVerse.id);
+                linkRequest.onsuccess = () => {
+                    const content = linkRequest.result?.content || '';
+                    const links = [...content.matchAll(/\[\[(.*?)\]\]/g)].map(match => match[0]);
+
+                    if (links.length === 0) {
+                        speak("No links.");
+                        return;
+                    }
+
+                    if (links.length === 1) {
+                        const target = parseLinkTarget(links[0]);
+                        if (!target) {
+                            speak("Invalid link target.");
+                            return;
+                        }
+                        navigationHistory.push(currentVerseIndex);
+                        jumpTo(target.book, target.chapter, target.verse);
+                        return;
+                    }
+
+                    clearAllModes();
+                    isMenuMode = true;
+                    menuOptions = links;
+                    currentMenuIndex = 0;
+                    speak("Link Menu. 1 of " + menuOptions.length + ": " + menuOptions[0] + ". Up and down to navigate, Enter to select, Escape to cancel.");
+                };
+            }
             break;
         case 'F':
             event.preventDefault();
@@ -569,8 +802,10 @@ window.addEventListener('DOMContentLoaded', () => {
     const appContainer = document.getElementById('app-container');
     const searchInput = document.getElementById('search-input');
     const noteEditor = document.getElementById('note-editor');
+    const importFile = document.getElementById('import-file');
     searchInputEl = searchInput;
     noteEditorEl = noteEditor;
+    importFileEl = importFile;
 
     function activateEngine() {
         isInitialized = true;
@@ -646,6 +881,60 @@ window.addEventListener('DOMContentLoaded', () => {
     noteEditor.addEventListener('keydown', (event) => {
         event.stopPropagation();
 
+        if (event.altKey && event.key.toUpperCase() === 'L') {
+            event.preventDefault();
+            if (anchoredVerseIndex < 0) {
+                speak("No anchor set.");
+                return;
+            }
+            const anchorVerse = memoryCache[anchoredVerseIndex];
+            const linkString = `[[${anchorVerse.book_name} ${anchorVerse.chapter}:${anchorVerse.verse}]]`;
+            const start = noteEditor.selectionStart ?? noteEditor.value.length;
+            const end = noteEditor.selectionEnd ?? start;
+            noteEditor.value = noteEditor.value.slice(0, start) + linkString + noteEditor.value.slice(end);
+            const nextPos = start + linkString.length;
+            noteEditor.selectionStart = nextPos;
+            noteEditor.selectionEnd = nextPos;
+            speak("Link inserted.");
+            return;
+        }
+
+        if (event.altKey && event.key.toUpperCase() === 'J') {
+            event.preventDefault();
+            const cursorPos = noteEditor.selectionStart ?? 0;
+            const fullText = noteEditor.value;
+            const lineStart = fullText.lastIndexOf('\n', Math.max(0, cursorPos - 1)) + 1;
+            const lineEndIndex = fullText.indexOf('\n', cursorPos);
+            const lineEnd = lineEndIndex === -1 ? fullText.length : lineEndIndex;
+            const currentLine = fullText.slice(lineStart, lineEnd);
+            const linkMatch = currentLine.match(/\[\[(.*?)\]\]/);
+            if (!linkMatch) {
+                speak("No links.");
+                return;
+            }
+
+            const target = parseLinkTarget(linkMatch[0]);
+            if (!target) {
+                speak("Invalid link target.");
+                return;
+            }
+
+            const saveTx = db.transaction([NOTES_STORE], "readwrite");
+            const saveStore = saveTx.objectStore(NOTES_STORE);
+            saveStore.put({
+                note_id: memoryCache[currentVerseIndex].id,
+                content: noteEditor.value.trim()
+            });
+            saveTx.oncomplete = () => {
+                isNoteMode = false;
+                focusTrap.focus();
+                navigationHistory.push(currentVerseIndex);
+                jumpTo(target.book, target.chapter, target.verse);
+                speak("Teleporting.");
+            };
+            return;
+        }
+
         if (event.key === 'Escape') {
             event.preventDefault();
             const saveTx = db.transaction([NOTES_STORE], "readwrite");
@@ -659,6 +948,31 @@ window.addEventListener('DOMContentLoaded', () => {
             focusTrap.focus();
             speak("Note saved.");
         }
+    });
+
+    importFile.addEventListener('change', (event) => {
+        const file = event.target.files && event.target.files[0];
+        if (!file || !db) return;
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const parsed = JSON.parse(reader.result);
+                if (!Array.isArray(parsed)) {
+                    speak("Invalid backup format.");
+                    return;
+                }
+                const tx = db.transaction([NOTES_STORE], "readwrite");
+                const store = tx.objectStore(NOTES_STORE);
+                parsed.forEach(note => store.put(note));
+                tx.oncomplete = () => speak("Backup imported.");
+            } catch (error) {
+                console.error("Import parse error:", error);
+                speak("Invalid backup file.");
+            }
+        };
+        reader.readAsText(file);
+        event.target.value = '';
     });
 
     window.addEventListener('keydown', handleInput);
