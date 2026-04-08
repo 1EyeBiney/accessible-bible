@@ -1,5 +1,5 @@
 /**
- * Accessible Study Bible - v0.16.0
+ * Accessible Study Bible - v0.17.1
  * Relational Linking, Vertical Verse Actions, Local Note Backups
  */
 
@@ -263,10 +263,18 @@ function getNextHymn() {
     return grabBag.pop();
 }
 
+function formatSongTitle(filename) {
+    // Strip .mp3, strip trailing digits, replace underscores with spaces
+    let base = filename.replace(/\.mp3$/i, '').replace(/\d+$/, '').replace(/_/g, ' ');
+    // Apply Title Case
+    return base.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+}
+
 function playNextTrack() {
     const standbyAudio = activeAudio === audioA ? audioB : audioA;
     const previousAudio = activeAudio;
     const targetVolume = volumeStages[currentVolumeIndex];
+    const nextTrack = getNextHymn();
 
     if (crossfadeTimer) {
         clearInterval(crossfadeTimer);
@@ -276,8 +284,9 @@ function playNextTrack() {
     previousAudio.removeEventListener('ended', onTrackEnded);
     standbyAudio.pause();
     standbyAudio.currentTime = 0;
-    standbyAudio.src = `./audio/hymns/${getNextHymn()}`;
+    standbyAudio.src = `./audio/hymns/${nextTrack}`;
     standbyAudio.volume = 0;
+    speak("Now playing " + formatSongTitle(nextTrack));
 
     const playPromise = standbyAudio.play();
     if (playPromise && typeof playPromise.catch === 'function') {
@@ -635,7 +644,6 @@ function handleInput(event) {
             if (event.shiftKey) break;
             event.preventDefault();
             playNextTrack();
-            speak("Crossfading to next track.");
             break;
         case 'M':
             event.preventDefault();

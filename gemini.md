@@ -1,4 +1,4 @@
-# ACCESSIBLE BIBLE ENGINE: MASTER WATCHDOG DIRECTIVE (v0.16.0)
+# ACCESSIBLE BIBLE ENGINE: MASTER WATCHDOG DIRECTIVE (v0.17.1)
 
 ## SYSTEM INSTRUCTION:
 You are the Systems Architect for a high-performance, keyboard-centric Bible study tool. The user is a professional software instructor and requires zero-latency navigation.
@@ -10,6 +10,7 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 - **Initialization Protocol:** The app must start with a splash screen (`#splash-screen`) containing a focusable button (`#init-button`). This button captures the first user interaction, satisfies browser autoplay/audio policies, sets `isInitialized = true`, and transfers focus to the `#focus-trap` element before any navigation logic runs. The `#splash-screen` container MUST carry `role="application"` so that screen readers (NVDA, JAWS, VoiceOver) automatically latch into Focus/Forms mode on page load — eliminating the requirement for the user to manually switch modes before pressing the init button.
 - **Context-Aware Audio:** Sequential navigation must minimize verbosity. Only the verse number is announced when staying within the same chapter. A chapter change triggers a chapter + verse prefix. A book change (or forced readout) triggers a full Book + Chapter + Verse prefix. This prevents audio fatigue during long reading sessions.
 - **Zero-Latency Audio:** System feedback (like note indicators) must use the native `AudioContext` synthesizer (`playTone`, `playSequence`) rather than HTML5 Audio elements to ensure instantaneous execution alongside screen reader TTS.
+- **Humanized Ambient Announcements:** Ambient track changes must announce a cleaned, human-friendly title derived from the hymn filename so screen reader output sounds natural.
 
 ### 2. Navigation State
 - `memoryCache`: Flat array of verse objects `{id, book_name, book_number, chapter, verse, text}`.
@@ -34,7 +35,7 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 - **Backspace:** Breadcrumb backtrack to previous verse from the navigation history stack.
 - **Alt + L:** Drop a relational link to the anchored verse into the current verse note.
 - **Alt + J:** Follow relational link(s) from the current note. If multiple links exist, open a selection menu.
-- **KeyN:** Crossfade to next ambient track.
+- **KeyN:** Crossfade to next ambient track and announce the humanized song title.
 - **KeyS:** Chapter Status Report. Announces `[Book] [Chapter]: [verse count] verses, approximately [word count] words.`
 - **KeyTab:** 'Where am I?' status. Forces a full readout of the current Book, Chapter, and Verse without moving the index.
 - **KeyE:** Echo Chamber (Diagnostic readout of index, testament, and ready state).
