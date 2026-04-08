@@ -6,7 +6,7 @@
 // --- Global State ---
 let db;
 const DB_NAME = "BibleStudyDB";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const TEXT_STORE = "bibleText";
 const NOTES_STORE = "userNotes";
 
