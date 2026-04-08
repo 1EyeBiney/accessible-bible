@@ -1,17 +1,18 @@
 const fs = require('fs');
 
 // 1. Define the input and output parameters
-const inputFile = 'bsb.json';
+const inputFile = 'bsb_dirty_backup.json'; // Always run against the raw source
 const outputFile = 'bsb_clean.json';
 
 console.log(`Loading ${inputFile}...`);
 
-// 2. Read and parse the 7MB JSON file
+// 2. Read and parse the JSON file
 let rawData;
 try {
     rawData = fs.readFileSync(inputFile, 'utf8');
 } catch (err) {
     console.error(`Error reading ${inputFile}:`, err.message);
+    console.error(`Please ensure your original file is named '${inputFile}' and is in the same directory.`);
     process.exit(1);
 }
 
@@ -25,18 +26,28 @@ bibleArray.forEach(verse => {
         
         verse.text = verse.text
             // Target 1: The "b" hallucination (Finds standalone 'bb', 'bbb', etc.)
-            // We use {2,} to ensure we don't accidentally delete a valid single 'b' if it exists.
             .replace(/\b[bB]{2,}\b/g, '') 
             
-            // Target 2: The Punctuation Allow-List
+            // Target 2: Strip brackets but leave the word inside (e.g. "[it]" becomes "it")
+            .replace(/\[|\]/g, '') 
+            
+            // Target 3: Remove spaced ellipses (e.g. ". . ." or "...")
+            .replace(/\s*\.\s*\.\s*\.\s*/g, ' ') 
+            
+            // Target 4: Remove hyphens that have spaces around them (e.g. "God - made")
+            .replace(/\s+-\s+/g, ' ') 
+            
+            // Target 5: Fix hyphens directly preceding punctuation (e.g. "above -.")
+            .replace(/\s+-[.,;:?!]/g, match => match.slice(-1)) 
+            
+            // Target 6: The Punctuation Allow-List
             // Removes EVERYTHING except letters, numbers, spaces, and standard punctuation.
             .replace(/[^\w\s.,;:?!'"()-]/g, '') 
             
-            // Target 3: Cleanup
-            // Collapses any double/triple spaces created by the removals into a single space
+            // Target 7: Collapse multiple spaces into one
             .replace(/\s{2,}/g, ' ') 
             
-            // Strips leading/trailing whitespace
+            // Final Polish: Strip leading/trailing whitespace
             .trim(); 
 
         // If the text changed, increment our tracker
