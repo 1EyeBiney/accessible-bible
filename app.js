@@ -1,12 +1,12 @@
 /**
- * Accessible Study Bible - v0.11.0
- * State-Based Search Engine, Stealth Input Protocol, Result Carousel
+ * Accessible Study Bible - v0.13.0
+ * Web Audio Synth Indicators, Note Presence Sonification
  */
 
 // --- Global State ---
 let db;
 const DB_NAME = "BibleStudyDB";
-const DB_VERSION = 2;
+const DB_VERSION = 4;
 const TEXT_STORE = "bibleText";
 const NOTES_STORE = "userNotes";
 
@@ -19,6 +19,7 @@ let inputBuffer = '';
 let isChapterMode = false;
 let isVerseMode = false;
 let isSearchMode = false;
+let isNoteMode = false;
 let searchResults = [];
 let currentSearchResultIndex = -1;
 let isReady = false;
@@ -26,6 +27,9 @@ let isInitialized = false;
 let lastAnnouncedBook = '';
 let lastAnnouncedChapter = -1;
 let searchInputEl = null;
+let noteEditorEl = null;
+let audioCtx = null;
+const AUDIO_GAIN_BOOST = 1.45;
 
 const hymnList = ['amazing_grace1.mp3', 'amazing_grace2.mp3', 'come_thou_fount_of_many_blessings1.mp3', 'come_thou_fount_of_many_blessings2.mp3', 'holy_holy_holy1.mp3', 'holy_holy_holy2.mp3', 'how_great_thou_art1.mp3', 'how_great_thou_art2.mp3', 'it_is_well_with_my_soul1.mp3', 'it_is_well_with_my_soul2.mp3'];
 let grabBag = [];
@@ -49,6 +53,39 @@ function speak(message) {
     }, 50); 
 }
 
+function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playTone(freq, type, dur, vol) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const boostedVol = Math.min(1, vol * AUDIO_GAIN_BOOST);
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(boostedVol, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + dur);
+}
+
+function playSequence(types, freqs, dur, vol) {
+    if (!Array.isArray(freqs) || freqs.length === 0) return;
+    for (let i = 0; i < freqs.length; i++) {
+        setTimeout(() => {
+            playTone(freqs[i], (types && types[i]) || 'sine', dur, vol);
+        }, i * dur * 1000);
+    }
+}
+
+function playNoteIndicator() {
+    playSequence(['sine', 'sine', 'sine', 'sine'], [1000, 1500, 2000, 2500], 0.05, 0.2);
+}
+
 // --- Data Pipeline ---
 function initDatabase() {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -65,9 +102,10 @@ function initDatabase() {
 
     request.onupgradeneeded = (event) => {
         const upgradeDb = event.target.result;
-        if (!upgradeDb.objectStoreNames.contains(TEXT_STORE)) {
-            upgradeDb.createObjectStore(TEXT_STORE, { keyPath: "id" });
+        if (upgradeDb.objectStoreNames.contains(TEXT_STORE)) {
+            upgradeDb.deleteObjectStore(TEXT_STORE);
         }
+        upgradeDb.createObjectStore(TEXT_STORE, { keyPath: "id" });
         if (!upgradeDb.objectStoreNames.contains(NOTES_STORE)) {
             upgradeDb.createObjectStore(NOTES_STORE, { keyPath: "note_id" });
         }
@@ -90,7 +128,7 @@ function checkAndLoadData() {
 }
 
 function fetchBibleJSON() {
-    fetch('bsb.json')
+    fetch('bsb1.json')
         .then(response => response.json())
         .then(data => {
             const transaction = db.transaction([TEXT_STORE], "readwrite");
@@ -143,6 +181,16 @@ function readCurrentVerse(forceFull = false) {
     lastAnnouncedChapter = verseObj.chapter;
 
     speak(prefix + verseObj.text);
+
+    if (!db) return;
+    const noteTx = db.transaction([NOTES_STORE], "readonly");
+    const noteStore = noteTx.objectStore(NOTES_STORE);
+    const noteRequest = noteStore.get(verseObj.id);
+    noteRequest.onsuccess = () => {
+        if (noteRequest.result && noteRequest.result.content.trim() !== '') {
+            playNoteIndicator();
+        }
+    };
 }
 
 // --- Mode Safety: clear all search/input modes ---
@@ -153,6 +201,7 @@ function clearAllModes() {
     isChapterMode = false;
     isVerseMode = false;
     isSearchMode = false;
+    isNoteMode = false;
     searchResults = [];
     currentSearchResultIndex = -1;
 }
@@ -246,6 +295,13 @@ function handleInput(event) {
 
     const key = event.key;
     const keyUpper = key.toUpperCase();
+
+    if (key === 'Escape') {
+        clearAllModes();
+        event.preventDefault();
+        speak("Search and modes cleared.");
+        return;
+    }
 
     if (searchResults.length > 0 && (key === ']' || key === '[')) {
         event.preventDefault();
@@ -431,7 +487,29 @@ function handleInput(event) {
             break;
         case 'M':
             event.preventDefault();
-            speak("Press M to edit note.");
+            if (!isReady || !db || !noteEditorEl) break;
+            clearAllModes();
+            isNoteMode = true;
+
+            const activeVerse = memoryCache[currentVerseIndex];
+            const notesTx = db.transaction([NOTES_STORE], "readonly");
+            const notesStore = notesTx.objectStore(NOTES_STORE);
+            const noteRequest = notesStore.get(activeVerse.id);
+
+            noteRequest.onsuccess = () => {
+                if (noteRequest.result) {
+                    noteEditorEl.value = noteRequest.result.content;
+                    speak("Edit note: " + noteRequest.result.content);
+                } else {
+                    noteEditorEl.value = '';
+                    speak(
+                        "New note for " + activeVerse.book_name + " " + activeVerse.chapter +
+                        " verse " + activeVerse.verse + ". Type and press Escape to save."
+                    );
+                }
+            };
+
+            noteEditorEl.focus();
             break;
         case 'E': {
             const testament = isReady ? memoryCache[currentVerseIndex].testament : 'unknown';
@@ -490,10 +568,13 @@ window.addEventListener('DOMContentLoaded', () => {
     const initButton = document.getElementById('init-button');
     const appContainer = document.getElementById('app-container');
     const searchInput = document.getElementById('search-input');
+    const noteEditor = document.getElementById('note-editor');
     searchInputEl = searchInput;
+    noteEditorEl = noteEditor;
 
     function activateEngine() {
         isInitialized = true;
+        initAudio();
         playNextTrack();
         splashScreen.style.display = 'none';
         appContainer.style.display = 'block';
@@ -520,7 +601,7 @@ window.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => speak("Press Enter to begin."), 1000);
 
     focusTrap.addEventListener('blur', () => {
-        if (isInitialized && !isSearchMode) {
+        if (isInitialized && !isSearchMode && !isNoteMode) {
             requestAnimationFrame(() => focusTrap.focus());
         }
     });
@@ -559,6 +640,24 @@ window.addEventListener('DOMContentLoaded', () => {
                 searchResults[0].book_name + " chapter " + searchResults[0].chapter + ", verse " +
                 searchResults[0].verse + ": " + searchResults[0].text
             );
+        }
+    });
+
+    noteEditor.addEventListener('keydown', (event) => {
+        event.stopPropagation();
+
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            const saveTx = db.transaction([NOTES_STORE], "readwrite");
+            const saveStore = saveTx.objectStore(NOTES_STORE);
+            saveStore.put({
+                note_id: memoryCache[currentVerseIndex].id,
+                content: noteEditor.value.trim()
+            });
+
+            isNoteMode = false;
+            focusTrap.focus();
+            speak("Note saved.");
         }
     });
 
