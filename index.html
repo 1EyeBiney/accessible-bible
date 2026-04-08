@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accessible Study Bible</title>
+    <style>
+        /* A utility class to visually hide text while keeping it accessible to screen readers */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="aria-announcer" aria-live="polite" class="sr-only">
+        Initializing study environment...
+    </div>
+
+    <main id="app-container">
+        <h1>Accessible Study Bible</h1>
+        <p>Press '?' for keyboard commands.</p>
+        
+        <div id="content-display" aria-hidden="true">
+            </div>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
