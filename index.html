@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Accessible Bible(v0.10.0)</title>
+    <title>Accessible Bible(v0.11.0)</title>
     <style>
         /* A utility class to visually hide text while keeping it accessible to screen readers */
         .sr-only {
@@ -46,6 +46,7 @@
         <p>Press '?' for keyboard commands.</p>
 
         <div id="focus-trap" role="application" tabindex="0" class="sr-only"></div>
+        <input type="text" id="search-input" class="sr-only" aria-label="Search Query">
 
         <div id="content-display" aria-hidden="true">
             </div>

@@ -1,4 +1,4 @@
-# ACCESSIBLE BIBLE ENGINE: MASTER WATCHDOG DIRECTIVE
+# ACCESSIBLE BIBLE ENGINE: MASTER WATCHDOG DIRECTIVE (v0.11.0)
 
 ## SYSTEM INSTRUCTION:
 You are the Systems Architect for a high-performance, keyboard-centric Bible study tool. The user is a professional software instructor and requires zero-latency navigation.
@@ -20,8 +20,14 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 - **PageUp/Down:** Chapter jumps. PageDown at last chapter spills to next book.
 - **Shift + PageUp/Down:** Book jumps.
 - **KeyB:** Activates Book Search mode. Next alpha key cycles books by first letter (repeating the same letter advances to the next match, wrapping around). Enter/Escape/non-alpha exits.
+- **KeyF:** Activates Word Search mode. Focus moves to `#search-input`; type query and press Enter to run a full-cache text filter.
+- **Key]:** Next Search Result in the result carousel (wraps at end).
+- **Key[:** Previous Search Result in the result carousel (wraps at beginning).
 - **KeyC:** Activates Chapter mode. Type digits then Enter to jump to that chapter in the current book. Escape cancels.
 - **KeyV:** Activates Verse mode. Type digits then Enter to jump to that verse in the current book/chapter. Escape cancels.
+- **Shift + V:** Cycle ambient volume (0, 5, 10, 20, 30, 40).
+- **KeyM:** Edit Note (Memo).
+- **KeyN:** Crossfade to next ambient track.
 - **KeyS:** Chapter Status Report. Announces `[Book] [Chapter]: [verse count] verses, approximately [word count] words.`
 - **KeyTab:** 'Where am I?' status. Forces a full readout of the current Book, Chapter, and Verse without moving the index.
 - **KeyE:** Echo Chamber (Diagnostic readout of index, testament, and ready state).
@@ -29,6 +35,7 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 
 ### 4. Input Protocol
 - **Modal Exclusivity:** Search modes are mutually exclusive. Activating B, C, or V explicitly sets all other mode flags to `false` and clears `inputBuffer` via `clearAllModes()`. There is no state where two modes are simultaneously active.
+- **Stealth Entry Protocol:** Text entry for queries or notes must use visually hidden form elements (`#search-input`, `#note-editor`) to leverage native screen reader text-editing features without breaking the focus trap.
 - **No Browser Modals:** Navigation never blocks the main thread with `prompt()` or `alert()`.
 - **Prevention:** `event.preventDefault()` is called for all navigation keys (arrows, page, mode triggers, digits, Enter within a mode) to suppress browser defaults.
 - **Focus Lock:** The `#focus-trap` element uses `role="application"` and `tabindex="0"` to signal to screen readers that all keyboard input should pass directly to the script. A `blur` listener on `#focus-trap` uses `requestAnimationFrame` to immediately reclaim focus whenever it strays, keeping the engine in full keyboard control after initialization.

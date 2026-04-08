@@ -1,6 +1,6 @@
 /**
- * Accessible Study Bible - v0.9.0
- * Context-Aware Verbosity, Tab 'Where Am I' Key
+ * Accessible Study Bible - v0.11.0
+ * State-Based Search Engine, Stealth Input Protocol, Result Carousel
  */
 
 // --- Global State ---
@@ -18,10 +18,24 @@ let lastSearchLetter = '';
 let inputBuffer = '';
 let isChapterMode = false;
 let isVerseMode = false;
+let isSearchMode = false;
+let searchResults = [];
+let currentSearchResultIndex = -1;
 let isReady = false;
 let isInitialized = false;
 let lastAnnouncedBook = '';
 let lastAnnouncedChapter = -1;
+let searchInputEl = null;
+
+const hymnList = ['amazing_grace1.mp3', 'amazing_grace2.mp3', 'come_thou_fount_of_many_blessings1.mp3', 'come_thou_fount_of_many_blessings2.mp3', 'holy_holy_holy1.mp3', 'holy_holy_holy2.mp3', 'how_great_thou_art1.mp3', 'how_great_thou_art2.mp3', 'it_is_well_with_my_soul1.mp3', 'it_is_well_with_my_soul2.mp3'];
+let grabBag = [];
+let audioA = new Audio();
+let audioB = new Audio();
+let activeAudio = audioA;
+const volumeStages = [0.0, 0.05, 0.1, 0.2, 0.3, 0.4];
+let currentVolumeIndex = 2;
+let crossfadeTimer = null;
+const onTrackEnded = () => playNextTrack();
 
 const announcer = document.getElementById('aria-announcer');
 const splashScreen = document.getElementById('splash-screen');
@@ -105,7 +119,7 @@ function loadToMemory() {
         memoryCache = rawData;
         currentBookName = memoryCache[0].book_name;
         isReady = true;
-        speak("Library ready. Use left and right arrows to read.");
+        speak("Library ready. Use left and right arrows to read. Press M to edit note.");
     };
 }
 
@@ -138,6 +152,71 @@ function clearAllModes() {
     inputBuffer = '';
     isChapterMode = false;
     isVerseMode = false;
+    isSearchMode = false;
+    searchResults = [];
+    currentSearchResultIndex = -1;
+}
+
+function getNextHymn() {
+    if (grabBag.length === 0) {
+        grabBag = [...hymnList];
+        for (let i = grabBag.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [grabBag[i], grabBag[j]] = [grabBag[j], grabBag[i]];
+        }
+    }
+    return grabBag.pop();
+}
+
+function playNextTrack() {
+    const standbyAudio = activeAudio === audioA ? audioB : audioA;
+    const previousAudio = activeAudio;
+    const targetVolume = volumeStages[currentVolumeIndex];
+
+    if (crossfadeTimer) {
+        clearInterval(crossfadeTimer);
+        crossfadeTimer = null;
+    }
+
+    previousAudio.removeEventListener('ended', onTrackEnded);
+    standbyAudio.pause();
+    standbyAudio.currentTime = 0;
+    standbyAudio.src = `/audio/hymns/${getNextHymn()}`;
+    standbyAudio.volume = 0;
+
+    const playPromise = standbyAudio.play();
+    if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch((error) => {
+            console.warn('Ambient audio playback blocked or failed:', error);
+        });
+    }
+
+    const durationMs = 2000;
+    const stepMs = 100;
+    const totalSteps = durationMs / stepMs;
+    let step = 0;
+    const startVolume = previousAudio.paused ? 0 : previousAudio.volume;
+
+    crossfadeTimer = setInterval(() => {
+        step += 1;
+        const progress = Math.min(step / totalSteps, 1);
+
+        previousAudio.volume = Math.max(0, startVolume * (1 - progress));
+        standbyAudio.volume = Math.min(targetVolume, targetVolume * progress);
+
+        if (progress >= 1) {
+            clearInterval(crossfadeTimer);
+            crossfadeTimer = null;
+
+            previousAudio.pause();
+            previousAudio.currentTime = 0;
+            previousAudio.volume = targetVolume;
+
+            activeAudio = standbyAudio;
+            activeAudio.removeEventListener('ended', onTrackEnded);
+            activeAudio.addEventListener('ended', onTrackEnded);
+        }
+    }, stepMs);
 }
 
 // --- Coordinate-Based Navigation ---
@@ -167,6 +246,41 @@ function handleInput(event) {
 
     const key = event.key;
     const keyUpper = key.toUpperCase();
+
+    if (searchResults.length > 0 && (key === ']' || key === '[')) {
+        event.preventDefault();
+
+        if (key === ']') {
+            currentSearchResultIndex += 1;
+            if (currentSearchResultIndex >= searchResults.length) {
+                currentSearchResultIndex = 0;
+            }
+        } else {
+            currentSearchResultIndex -= 1;
+            if (currentSearchResultIndex < 0) {
+                currentSearchResultIndex = searchResults.length - 1;
+            }
+        }
+
+        currentVerseIndex = memoryCache.findIndex(v => v === searchResults[currentSearchResultIndex]);
+        speak(
+            "Match " + (currentSearchResultIndex + 1) + " of " + searchResults.length + ": " +
+            memoryCache[currentVerseIndex].book_name + " " + memoryCache[currentVerseIndex].chapter + ":" +
+            memoryCache[currentVerseIndex].verse + " - " + memoryCache[currentVerseIndex].text
+        );
+        return;
+    }
+
+    if (key === 'V' && event.shiftKey) {
+        event.preventDefault();
+        currentVolumeIndex += 1;
+        if (currentVolumeIndex >= volumeStages.length) {
+            currentVolumeIndex = 0;
+        }
+        activeAudio.volume = volumeStages[currentVolumeIndex];
+        speak("Ambient volume " + Math.round(volumeStages[currentVolumeIndex] * 100));
+        return;
+    }
 
     // --- Tab: 'Where Am I?' ---
     if (key === 'Tab') {
@@ -309,6 +423,16 @@ function handleInput(event) {
                 speak("Beginning of library.");
             }
             break;
+        case 'N':
+            if (event.shiftKey) break;
+            event.preventDefault();
+            playNextTrack();
+            speak("Crossfading to next track.");
+            break;
+        case 'M':
+            event.preventDefault();
+            speak("Press M to edit note.");
+            break;
         case 'E': {
             const testament = isReady ? memoryCache[currentVerseIndex].testament : 'unknown';
             speak(`Echo Chamber active. Index ${currentVerseIndex}. Testament: ${testament}. Ready state: ${isReady}`);
@@ -321,6 +445,15 @@ function handleInput(event) {
             isBookSearchMode = true;
             speak("Book Search. Press a letter.");
             break;
+        case 'F':
+            event.preventDefault();
+            if (!isReady || !searchInputEl) break;
+            clearAllModes();
+            isSearchMode = true;
+            searchInputEl.value = '';
+            searchInputEl.focus();
+            speak("Word search. Type query and press Enter.");
+            break;
         case 'C':
             event.preventDefault();
             if (!isReady) break;
@@ -330,6 +463,7 @@ function handleInput(event) {
             break;
         case 'V':
             event.preventDefault();
+            if (event.shiftKey) break;
             if (!isReady) break;
             clearAllModes();
             isVerseMode = true;
@@ -342,7 +476,11 @@ function handleInput(event) {
             const chapterVerses = memoryCache.filter(v => v.book_name === cur.book_name && v.chapter === cur.chapter);
             const verseCount = chapterVerses.length;
             const wordCount = chapterVerses.reduce((sum, v) => sum + v.text.trim().split(/\s+/).length, 0);
-            speak(`${cur.book_name} ${cur.chapter}: ${verseCount} verses, approximately ${wordCount} words.`);
+            let statusMessage = `${cur.book_name} ${cur.chapter}: ${verseCount} verses, approximately ${wordCount} words.`;
+            if (searchResults.length > 0) {
+                statusMessage += ` Search active: viewing match ${currentSearchResultIndex + 1} of ${searchResults.length}.`;
+            }
+            speak(statusMessage);
             break;
         }
     }
@@ -351,14 +489,17 @@ function handleInput(event) {
 window.addEventListener('DOMContentLoaded', () => {
     const initButton = document.getElementById('init-button');
     const appContainer = document.getElementById('app-container');
+    const searchInput = document.getElementById('search-input');
+    searchInputEl = searchInput;
 
     function activateEngine() {
         isInitialized = true;
+        playNextTrack();
         splashScreen.style.display = 'none';
         appContainer.style.display = 'block';
         focusTrap.focus();
         console.log("Engine Active");
-        speak("Study environment initialized. Use arrows to navigate.");
+        speak("Study environment initialized. Use arrows to navigate. Press M to edit note.");
         setTimeout(() => initDatabase(), 100);
     }
 
@@ -379,8 +520,45 @@ window.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => speak("Press Enter to begin."), 1000);
 
     focusTrap.addEventListener('blur', () => {
-        if (isInitialized) {
+        if (isInitialized && !isSearchMode) {
             requestAnimationFrame(() => focusTrap.focus());
+        }
+    });
+
+    searchInput.addEventListener('keydown', (event) => {
+        event.stopPropagation();
+
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            isSearchMode = false;
+            searchInput.value = '';
+            focusTrap.focus();
+            speak("Search cancelled.");
+            return;
+        }
+
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            const query = searchInput.value.trim().toLowerCase();
+            if (!query) return;
+
+            searchResults = memoryCache.filter(v => v.text.toLowerCase().includes(query));
+
+            if (searchResults.length === 0) {
+                speak("No matches found for " + query);
+                return;
+            }
+
+            currentSearchResultIndex = 0;
+            isSearchMode = false;
+            focusTrap.focus();
+
+            currentVerseIndex = memoryCache.findIndex(v => v === searchResults[0]);
+            speak(
+                "Found " + searchResults.length + " matches. Match 1: " +
+                searchResults[0].book_name + " chapter " + searchResults[0].chapter + ", verse " +
+                searchResults[0].verse + ": " + searchResults[0].text
+            );
         }
     });
 
