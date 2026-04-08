@@ -1,5 +1,5 @@
 /**
- * Accessible Study Bible - v0.15.0
+ * Accessible Study Bible - v0.16.0
  * Relational Linking, Vertical Verse Actions, Local Note Backups
  */
 
@@ -276,7 +276,7 @@ function playNextTrack() {
     previousAudio.removeEventListener('ended', onTrackEnded);
     standbyAudio.pause();
     standbyAudio.currentTime = 0;
-    standbyAudio.src = `/audio/hymns/${getNextHymn()}`;
+    standbyAudio.src = `./audio/hymns/${getNextHymn()}`;
     standbyAudio.volume = 0;
 
     const playPromise = standbyAudio.play();
