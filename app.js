@@ -1,5 +1,5 @@
 /**
- * Accessible Study Bible - v0.25.0
+ * Accessible Study Bible - v0.26.0
  * Visual Reference Header Injection
  */
 
@@ -62,7 +62,19 @@ let currentFontSize = 24;
 const THEMES = ['default', 'midnight', 'amber', 'macular', 'cyan'];
 let currentThemeIndex = 0;
 
-const hymnList = ['amazing_grace1.mp3', 'amazing_grace2.mp3', 'come_thou_fount_of_many_blessings1.mp3', 'come_thou_fount_of_many_blessings2.mp3', 'holy_holy_holy1.mp3', 'holy_holy_holy2.mp3', 'how_great_thou_art1.mp3', 'how_great_thou_art2.mp3', 'it_is_well_with_my_soul1.mp3', 'it_is_well_with_my_soul2.mp3'];
+const hymnList = [
+    'a_mighty_fortress_is_our_god1.mp3', 'a_mighty_fortress_is_our_god2.mp3',
+    'amazing_grace1.mp3', 'amazing_grace2.mp3', 'amazing_grace3.mp3', 'amazing_grace4.mp3',
+    'blessed_assurance1.mp3', 'blessed_assurance2.mp3',
+    'come_thou_fount_of_many_blessings1.mp3', 'come_thou_fount_of_many_blessings2.mp3', 'come_thou_fount_of_many_blessings3.mp3', 'come_thou_fount_of_many_blessings4.mp3',
+    'crown_him_with_many_crowns1.mp3', 'crown_him_with_many_crowns2.mp3',
+    'great_is_thy_faithfulness1.mp3', 'great_is_thy_faithfulness2.mp3',
+    'holy_holy_holy1.mp3', 'holy_holy_holy2.mp3',
+    'how_great_thou_art1.mp3', 'how_great_thou_art2.mp3',
+    'it_is_well_with_my_soul1.mp3', 'it_is_well_with_my_soul2.mp3',
+    'rock_of_ages1.mp3', 'rock_of_ages2.mp3',
+    'what_a_friend_we_have_in_jesus1.mp3', 'what_a_friend_we_have_in_jesus2.mp3'
+];
 let grabBag = [];
 let audioA = new Audio();
 let audioB = new Audio();
