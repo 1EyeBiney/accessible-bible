@@ -61,3 +61,5 @@ __pycache__/
 # --- Project Databases ---
 commentaries-database/
 writings-database/
+data/
+data.json 
