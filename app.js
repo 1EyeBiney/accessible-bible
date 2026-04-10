@@ -1,14 +1,16 @@
 /**
- * Accessible Study Bible - v0.17.1
- * Relational Linking, Vertical Verse Actions, Local Note Backups
+ * Accessible Study Bible - v0.25.0
+ * Visual Reference Header Injection
  */
 
 // --- Global State ---
 let db;
 const DB_NAME = "BibleStudyDB";
-const DB_VERSION = 4;
+const DB_VERSION = 6;
 const TEXT_STORE = "bibleText";
 const NOTES_STORE = "userNotes";
+const BOOKMARKS_STORE = "userBookmarks";
+const COMMENTARY_STORE = "expertCommentary";
 
 let memoryCache = []; 
 let currentVerseIndex = 0; 
@@ -22,11 +24,30 @@ let isSearchMode = false;
 let isNoteMode = false;
 let searchResults = [];
 let currentSearchResultIndex = -1;
+let bookmarksCache = [];
+let currentBookmarkIndex = -1;
 let anchoredVerseIndex = -1;
 let navigationHistory = [];
 let isMenuMode = false;
 let menuOptions = [];
 let currentMenuIndex = 0;
+let isKeyboardExplorer = false;
+let isHelpMode = false;
+let currentHelpIndex = 0;
+const helpMenuData = [
+    "Help Menu: Use up and down arrows to navigate, Escape to close.",
+    "Basic Navigation: Left and Right arrows move between verses.",
+    "Basic Navigation: Page Up and Page Down move between chapters.",
+    "Basic Navigation: Shift plus Page Up or Page Down moves between books.",
+    "Vertical Actions: Up arrow reads the note for the current verse.",
+    "Vertical Actions: Down arrow opens the Verse Menu to edit, delete, or copy.",
+    "Search: Press B for Book search, F for Word search, C for Chapter jump, and V for Verse jump.",
+    "Search: Use left and right brackets to cycle through word search results.",
+    "Relational Links: Press R to anchor a verse. Press Alt plus L to drop a link to it.",
+    "Relational Links: Press Alt plus J to jump to links in your current note. Press Backspace to return.",
+    "Audio: Press N to skip ambient tracks. Press Shift plus V to cycle volume.",
+    "Utilities: Press Tab for current location. Press S for chapter stats. Press F12 for Keyboard Explorer."
+];
 let isReady = false;
 let isInitialized = false;
 let lastAnnouncedBook = '';
@@ -34,8 +55,12 @@ let lastAnnouncedChapter = -1;
 let searchInputEl = null;
 let noteEditorEl = null;
 let importFileEl = null;
+let importCommentaryEl = null;
 let audioCtx = null;
 const AUDIO_GAIN_BOOST = 1.45;
+let currentFontSize = 24;
+const THEMES = ['default', 'midnight', 'amber', 'macular', 'cyan'];
+let currentThemeIndex = 0;
 
 const hymnList = ['amazing_grace1.mp3', 'amazing_grace2.mp3', 'come_thou_fount_of_many_blessings1.mp3', 'come_thou_fount_of_many_blessings2.mp3', 'holy_holy_holy1.mp3', 'holy_holy_holy2.mp3', 'how_great_thou_art1.mp3', 'how_great_thou_art2.mp3', 'it_is_well_with_my_soul1.mp3', 'it_is_well_with_my_soul2.mp3'];
 let grabBag = [];
@@ -92,6 +117,31 @@ function playNoteIndicator() {
     playSequence(['sine', 'sine', 'sine', 'sine'], [1000, 1500, 2000, 2500], 0.05, 0.2);
 }
 
+function playCommentaryCue() {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const delay = audioCtx.createDelay();
+    const feedback = audioCtx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.value = 1800;
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.04);
+    delay.delayTime.value = 0.08;
+    feedback.gain.value = 0.4;
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    gain.connect(delay);
+    delay.connect(feedback);
+    feedback.connect(delay);
+    delay.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.04);
+}
+
 // --- Data Pipeline ---
 function initDatabase() {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -114,6 +164,12 @@ function initDatabase() {
         upgradeDb.createObjectStore(TEXT_STORE, { keyPath: "id" });
         if (!upgradeDb.objectStoreNames.contains(NOTES_STORE)) {
             upgradeDb.createObjectStore(NOTES_STORE, { keyPath: "note_id" });
+        }
+        if (!upgradeDb.objectStoreNames.contains(BOOKMARKS_STORE)) {
+            upgradeDb.createObjectStore(BOOKMARKS_STORE, { keyPath: "id" });
+        }
+        if (!upgradeDb.objectStoreNames.contains(COMMENTARY_STORE)) {
+            upgradeDb.createObjectStore(COMMENTARY_STORE, { keyPath: "id" });
         }
     };
 }
@@ -161,15 +217,88 @@ function loadToMemory() {
         const rawData = request.result;
         rawData.sort((a, b) => (a.book_number - b.book_number) || (a.chapter - b.chapter) || (a.verse - b.verse));
         memoryCache = rawData;
+        loadBookmarks();
         currentBookName = memoryCache[0].book_name;
         isReady = true;
         speak("Library ready. Use left and right arrows to read. Press M to edit note.");
     };
 }
 
+function loadBookmarks() {
+    if (!db) return;
+    const tx = db.transaction([BOOKMARKS_STORE], "readonly");
+    const store = tx.objectStore(BOOKMARKS_STORE);
+    const req = store.getAll();
+    req.onsuccess = () => {
+        bookmarksCache = req.result.map(b => b.id).sort((a, b) => a - b);
+    };
+}
+
+function toggleCurrentBookmark() {
+    if (!db || !isReady) return;
+
+    const verseId = memoryCache[currentVerseIndex].id;
+    const existingIndex = bookmarksCache.indexOf(verseId);
+    const tx = db.transaction([BOOKMARKS_STORE], "readwrite");
+    const store = tx.objectStore(BOOKMARKS_STORE);
+
+    if (existingIndex !== -1) {
+        store.delete(verseId);
+        bookmarksCache.splice(existingIndex, 1);
+        currentBookmarkIndex = bookmarksCache.length === 0
+            ? -1
+            : Math.min(currentBookmarkIndex, bookmarksCache.length - 1);
+        speak("Bookmark removed.");
+        return;
+    }
+
+    if (bookmarksCache.length >= 10) {
+        speak("Bookmark limit reached. Maximum 10 bookmarks.");
+        return;
+    }
+
+    store.put({ id: verseId });
+    bookmarksCache.push(verseId);
+    bookmarksCache.sort((a, b) => a - b);
+    currentBookmarkIndex = bookmarksCache.indexOf(verseId);
+    speak("Bookmark added.");
+}
+
+function navigateBookmarks(direction) {
+    if (!isReady) return;
+    if (bookmarksCache.length === 0) {
+        speak("No bookmarks saved.");
+        return;
+    }
+
+    const currentVerseId = memoryCache[currentVerseIndex].id;
+    const verseBookmarkIndex = bookmarksCache.indexOf(currentVerseId);
+    if (verseBookmarkIndex !== -1) {
+        currentBookmarkIndex = verseBookmarkIndex;
+    }
+    if (currentBookmarkIndex < 0 || currentBookmarkIndex >= bookmarksCache.length) {
+        currentBookmarkIndex = 0;
+    }
+
+    currentBookmarkIndex = (currentBookmarkIndex + direction + bookmarksCache.length) % bookmarksCache.length;
+    const targetId = bookmarksCache[currentBookmarkIndex];
+    const targetVerseIndex = memoryCache.findIndex(v => v.id === targetId);
+
+    if (targetVerseIndex === -1) {
+        speak("Bookmark target not found.");
+        return;
+    }
+
+    currentVerseIndex = targetVerseIndex;
+    readCurrentVerse();
+}
+
 // --- Core Navigation Logic ---
 function readCurrentVerse(forceFull = false) {
     if (!isReady || memoryCache.length === 0) return;
+
+    document.getElementById('alert-note').style.display = 'none';
+    document.getElementById('alert-comm').style.display = 'none';
 
     const verseObj = memoryCache[currentVerseIndex];
     currentBookName = verseObj.book_name;
@@ -186,15 +315,29 @@ function readCurrentVerse(forceFull = false) {
     lastAnnouncedBook = verseObj.book_name;
     lastAnnouncedChapter = verseObj.chapter;
 
+    // --- VISUAL INJECTION ---
+    const visualReference = `${verseObj.book_name} ${verseObj.chapter}:${verseObj.verse}`;
+    document.getElementById('content-display').innerHTML = `<strong>${visualReference}</strong><br><br>${verseObj.text}`;
+
     speak(prefix + verseObj.text);
 
     if (!db) return;
-    const noteTx = db.transaction([NOTES_STORE], "readonly");
-    const noteStore = noteTx.objectStore(NOTES_STORE);
-    const noteRequest = noteStore.get(verseObj.id);
+    const curriculumId = (verseObj.book_number * 1000000) + (verseObj.chapter * 1000) + verseObj.verse;
+    const tx = db.transaction([NOTES_STORE, COMMENTARY_STORE], "readonly");
+
+    const noteRequest = tx.objectStore(NOTES_STORE).get(verseObj.id);
     noteRequest.onsuccess = () => {
         if (noteRequest.result && noteRequest.result.content.trim() !== '') {
             playNoteIndicator();
+            document.getElementById('alert-note').style.display = 'block';
+        }
+    };
+
+    const commRequest = tx.objectStore(COMMENTARY_STORE).get(curriculumId);
+    commRequest.onsuccess = () => {
+        if (commRequest.result) {
+            setTimeout(() => playCommentaryCue(), 150);
+            document.getElementById('alert-comm').style.display = 'block';
         }
     };
 }
@@ -227,13 +370,30 @@ function openNoteEditorForCurrentVerse() {
 
 function parseLinkTarget(linkText) {
     const clean = String(linkText).replace(/^\[\[/, '').replace(/\]\]$/, '').trim();
-    const match = clean.match(/^(.*)\s+(\d+):(\d+)$/);
+    const match = clean.match(/^(.*?)\s+(\d+):(\d+)/);
     if (!match) return null;
-    return {
-        book: match[1],
-        chapter: parseInt(match[2], 10),
-        verse: parseInt(match[3], 10)
+    
+    const rawBook = match[1].trim().toLowerCase();
+    
+    const bookNameMap = {
+        "gen": "Genesis", "exod": "Exodus", "lev": "Leviticus", "num": "Numbers", "deut": "Deuteronomy",
+        "josh": "Joshua", "judg": "Judges", "ruth": "Ruth", "1 sam": "1 Samuel", "2 sam": "2 Samuel",
+        "1 kgs": "1 Kings", "2 kgs": "2 Kings", "1 chr": "1 Chronicles", "2 chr": "2 Chronicles",
+        "ezra": "Ezra", "neh": "Nehemiah", "esth": "Esther", "job": "Job", "ps": "Psalms", "prov": "Proverbs",
+        "eccl": "Ecclesiastes", "song": "Song of Solomon", "isa": "Isaiah", "jer": "Jeremiah", "lam": "Lamentations",
+        "ezek": "Ezekiel", "dan": "Daniel", "hos": "Hosea", "joel": "Joel", "amos": "Amos", "obad": "Obadiah",
+        "jonah": "Jonah", "mic": "Micah", "nah": "Nahum", "hab": "Habakkuk", "zeph": "Zephaniah", "hag": "Haggai",
+        "zech": "Zechariah", "mal": "Malachi", "matt": "Matthew", "mark": "Mark", "luke": "Luke", "john": "John",
+        "acts": "Acts", "rom": "Romans", "1 cor": "1 Corinthians", "2 cor": "2 Corinthians", "gal": "Galatians",
+        "eph": "Ephesians", "phil": "Philippians", "col": "Colossians", "1 thess": "1 Thessalonians",
+        "2 thess": "2 Thessalonians", "1 tim": "1 Timothy", "2 tim": "2 Timothy", "titus": "Titus",
+        "phlm": "Philemon", "heb": "Hebrews", "jas": "James", "1 pet": "1 Peter", "2 pet": "2 Peter",
+        "1 john": "1 John", "2 john": "2 John", "3 john": "3 John", "jude": "Jude", "rev": "Revelation"
     };
+    
+    const finalBook = bookNameMap[rawBook] || match[1].trim();
+    
+    return { book: finalBook, chapter: parseInt(match[2], 10), verse: parseInt(match[3], 10) };
 }
 
 // --- Mode Safety: clear all search/input modes ---
@@ -246,6 +406,8 @@ function clearAllModes() {
     isSearchMode = false;
     isNoteMode = false;
     isMenuMode = false;
+    isHelpMode = false;
+    currentHelpIndex = 0;
     searchResults = [];
     currentSearchResultIndex = -1;
     menuOptions = [];
@@ -264,9 +426,7 @@ function getNextHymn() {
 }
 
 function formatSongTitle(filename) {
-    // Strip .mp3, strip trailing digits, replace underscores with spaces
     let base = filename.replace(/\.mp3$/i, '').replace(/\d+$/, '').replace(/_/g, ' ');
-    // Apply Title Case
     return base.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
 
@@ -338,6 +498,45 @@ function jumpTo(book, chapter, verse) {
     readCurrentVerse();
 }
 
+function getKeyboardExplorerDescription(event) {
+    const key = event.key;
+    const keyUpper = key.toUpperCase();
+
+    if (key === 'Escape') return 'Escape: Exit Keyboard Explorer.';
+    if (key === 'F12') return 'F12: Exit Keyboard Explorer.';
+    if (key === '?') return 'Question mark: Open Help Menu.';
+    if (key === 'ArrowLeft') return 'Left Arrow: Move to previous verse.';
+    if (key === 'ArrowRight') return 'Right Arrow: Move to next verse.';
+    if (key === 'ArrowUp') return event.shiftKey ? 'Shift plus Up Arrow: Read expert commentary.' : 'Up Arrow: Read the current verse note.';
+    if (key === 'ArrowDown') return 'Down Arrow: Open Verse Menu.';
+    if (key === 'PageUp') return event.shiftKey ? 'Shift plus Page Up: Move to previous book.' : 'Page Up: Move to previous chapter.';
+    if (key === 'PageDown') return event.shiftKey ? 'Shift plus Page Down: Move to next book.' : 'Page Down: Move to next chapter.';
+    if (key === 'Tab') return 'Tab: Read full current location.';
+    if (key === 'Backspace') return 'Backspace: Return to previous linked location.';
+    if (key === '[') return event.shiftKey ? 'Shift plus Left Bracket: Previous Bookmark.' : 'Left bracket: Previous word search result.';
+    if (key === ']') return event.shiftKey ? 'Shift plus Right Bracket: Next Bookmark.' : 'Right bracket: Next word search result.';
+
+    if (event.altKey && keyUpper === 'L') return 'Alt plus L: Drop a link to the anchored verse.';
+    if (event.altKey && keyUpper === 'J') return 'Alt plus J: Omni-Jump to relational link targets.';
+
+    if (keyUpper === 'B') return 'B: Start Book search mode.';
+    if (keyUpper === 'F') return 'F: Start Word search mode.';
+    if (keyUpper === 'C') return 'C: Start Chapter jump mode.';
+    if (keyUpper === 'V') return event.shiftKey ? 'Shift plus V: Cycle ambient volume.' : 'V: Start Verse jump mode.';
+    if (keyUpper === 'M') return 'M: Open note editor for this verse.';
+    if (keyUpper === 'R') return 'R: Anchor this verse for relational linking.';
+    if (keyUpper === 'N') return 'N: Skip to next ambient track.';
+    if (keyUpper === 'S') return 'S: Speak chapter status report.';
+    if (keyUpper === 'K') return 'K: Toggle bookmark for current verse.';
+    if (keyUpper === 'E') return 'E: Speak diagnostic engine state.';
+    if (keyUpper === 'O') return 'O: Open Options menu to import/export data.';
+    
+    if (key === 'Enter') return 'Enter: Commit the current mode action.';
+
+    const keyName = key === ' ' ? 'Space' : key;
+    return keyName + ': No mapped engine command.';
+}
+
 // --- Keyboard Input Routing ---
 function handleInput(event) {
     if (!isInitialized) {
@@ -350,6 +549,39 @@ function handleInput(event) {
 
     const key = event.key;
     const keyUpper = key.toUpperCase();
+
+    if (isKeyboardExplorer) {
+        event.preventDefault();
+        if (event.key === 'Escape' || event.key === 'F12') {
+            isKeyboardExplorer = false;
+            speak("Exiting Keyboard Explorer.");
+        } else {
+            speak(getKeyboardExplorerDescription(event));
+        }
+        return;
+    }
+
+    if (isHelpMode) {
+        event.preventDefault();
+        if (event.key === 'Escape') {
+            isHelpMode = false;
+            currentHelpIndex = 0;
+            speak("Help menu closed.");
+            return;
+        }
+        if (event.key === 'ArrowDown') {
+            currentHelpIndex = (currentHelpIndex + 1) % helpMenuData.length;
+            speak(helpMenuData[currentHelpIndex]);
+            return;
+        }
+        if (event.key === 'ArrowUp') {
+            currentHelpIndex = (currentHelpIndex - 1 + helpMenuData.length) % helpMenuData.length;
+            speak(helpMenuData[currentHelpIndex]);
+            return;
+        }
+        speak("Help menu active. Use up and down arrows to navigate. Escape closes help.");
+        return;
+    }
 
     if (isMenuMode) {
         event.preventDefault();
@@ -402,6 +634,28 @@ function handleInput(event) {
                 return;
             }
 
+            // Options Menu Logic
+            if (selected === 'Export Personal Notes') {
+                const exportTx = db.transaction([NOTES_STORE], "readonly");
+                const exportRequest = exportTx.objectStore(NOTES_STORE).getAll();
+                exportRequest.onsuccess = () => {
+                    const blob = new Blob([JSON.stringify(exportRequest.result)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const anchor = document.createElement('a');
+                    anchor.href = url; anchor.download = 'bible_notes_backup.json';
+                    document.body.appendChild(anchor); anchor.click(); document.body.removeChild(anchor); URL.revokeObjectURL(url);
+                    isMenuMode = false; speak("Notes exported.");
+                };
+                return;
+            }
+            if (selected === 'Import Personal Notes') { importFileEl.click(); isMenuMode = false; return; }
+            if (selected === 'Import Commentary') { importCommentaryEl.click(); isMenuMode = false; return; }
+            if (selected === 'Clear Commentary') { 
+                db.transaction([COMMENTARY_STORE], "readwrite").objectStore(COMMENTARY_STORE).clear(); 
+                isMenuMode = false; speak("Commentary cleared."); return; 
+            }
+
+            // Omni-Jump Selection Link Handling
             if (/^\[\[.*\]\]$/.test(selected)) {
                 const target = parseLinkTarget(selected);
                 if (!target) {
@@ -435,6 +689,12 @@ function handleInput(event) {
         } else {
             speak("No history.");
         }
+        return;
+    }
+
+    if (event.shiftKey && (key === '{' || key === '}' || key === '[' || key === ']')) {
+        event.preventDefault();
+        navigateBookmarks((key === '}' || key === ']') ? 1 : -1);
         return;
     }
 
@@ -480,19 +740,34 @@ function handleInput(event) {
         return;
     }
 
+    // --- Vertical Readout (Teacher & Student) ---
     if (key === 'ArrowUp') {
         event.preventDefault();
         if (!isReady || !db) return;
-        const noteTx = db.transaction([NOTES_STORE], "readonly");
-        const noteStore = noteTx.objectStore(NOTES_STORE);
-        const noteRequest = noteStore.get(memoryCache[currentVerseIndex].id);
-        noteRequest.onsuccess = () => {
-            if (noteRequest.result) {
-                speak("Note: " + noteRequest.result.content);
-            } else {
-                speak("No note.");
-            }
-        };
+        const curVerse = memoryCache[currentVerseIndex];
+        
+        if (event.shiftKey) {
+            const curriculumId = (curVerse.book_number * 1000000) + (curVerse.chapter * 1000) + curVerse.verse;
+            const tx = db.transaction([COMMENTARY_STORE], "readonly");
+            const req = tx.objectStore(COMMENTARY_STORE).get(curriculumId);
+            req.onsuccess = () => {
+                if (req.result && req.result.content && req.result.content.trim() !== '') {
+                    speak("Commentary: " + req.result.content);
+                } else {
+                    speak("No commentary available.");
+                }
+            };
+        } else {
+            const tx = db.transaction([NOTES_STORE], "readonly");
+            const req = tx.objectStore(NOTES_STORE).get(curVerse.id);
+            req.onsuccess = () => {
+                if (req.result && req.result.content && req.result.content.trim() !== '') {
+                    speak("Note: " + req.result.content);
+                } else {
+                    speak("No personal note.");
+                }
+            };
+        }
         return;
     }
 
@@ -645,45 +920,27 @@ function handleInput(event) {
             event.preventDefault();
             playNextTrack();
             break;
+        case 'K':
+            if (event.shiftKey) break;
+            event.preventDefault();
+            toggleCurrentBookmark();
+            break;
         case 'M':
             event.preventDefault();
             openNoteEditorForCurrentVerse();
             break;
-        case 'E': {
-            if (event.shiftKey) {
-                event.preventDefault();
-                if (!db) {
-                    speak("Database not ready.");
-                    break;
-                }
-                const exportTx = db.transaction([NOTES_STORE], "readonly");
-                const exportStore = exportTx.objectStore(NOTES_STORE);
-                const exportRequest = exportStore.getAll();
-                exportRequest.onsuccess = () => {
-                    const blob = new Blob([JSON.stringify(exportRequest.result)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const anchor = document.createElement('a');
-                    anchor.href = url;
-                    anchor.download = 'bible_notes_backup.json';
-                    document.body.appendChild(anchor);
-                    anchor.click();
-                    document.body.removeChild(anchor);
-                    URL.revokeObjectURL(url);
-                    speak("Notes exported.");
-                };
-                break;
-            }
+        case 'E':
             const testament = isReady ? memoryCache[currentVerseIndex].testament : 'unknown';
             speak(`Echo Chamber active. Index ${currentVerseIndex}. Testament: ${testament}. Ready state: ${isReady}`);
             break;
-        }
-        case 'I':
-            if (event.shiftKey) {
-                event.preventDefault();
-                if (importFileEl) {
-                    importFileEl.click();
-                }
-            }
+        case 'O':
+            event.preventDefault();
+            if (!isReady) break;
+            clearAllModes();
+            isMenuMode = true;
+            menuOptions = ['Export Personal Notes', 'Import Personal Notes', 'Import Commentary', 'Clear Commentary'];
+            currentMenuIndex = 0;
+            speak("Options Menu. 1 of 4: Export Personal Notes. Up and down arrows to navigate, Enter to select, Escape to close.");
             break;
         case 'B':
             event.preventDefault();
@@ -732,36 +989,35 @@ function handleInput(event) {
             event.preventDefault();
             if (!db || !isReady) break;
             {
-                const currentVerse = memoryCache[currentVerseIndex];
-                const linkTx = db.transaction([NOTES_STORE], "readonly");
-                const linkStore = linkTx.objectStore(NOTES_STORE);
-                const linkRequest = linkStore.get(currentVerse.id);
-                linkRequest.onsuccess = () => {
-                    const content = linkRequest.result?.content || '';
-                    const links = [...content.matchAll(/\[\[(.*?)\]\]/g)].map(match => match[0]);
-
-                    if (links.length === 0) {
-                        speak("No links.");
-                        return;
-                    }
-
+                const currentVerseId = memoryCache[currentVerseIndex].id;
+                const tx = db.transaction([NOTES_STORE, COMMENTARY_STORE], "readonly");
+                let combinedContent = "";
+                let pending = 2;
+                
+                const processLinks = () => {
+                    pending--;
+                    if (pending > 0) return;
+                    const links = [...new Set([...combinedContent.matchAll(/\[\[(.*?)\]\]/g)].map(m => m[0]))];
+                    
+                    if (links.length === 0) { speak("No links found."); return; }
                     if (links.length === 1) {
                         const target = parseLinkTarget(links[0]);
-                        if (!target) {
-                            speak("Invalid link target.");
-                            return;
-                        }
+                        if (!target) { speak("Invalid link target."); return; }
                         navigationHistory.push(currentVerseIndex);
                         jumpTo(target.book, target.chapter, target.verse);
                         return;
                     }
-
                     clearAllModes();
                     isMenuMode = true;
                     menuOptions = links;
                     currentMenuIndex = 0;
-                    speak("Link Menu. 1 of " + menuOptions.length + ": " + menuOptions[0] + ". Up and down to navigate, Enter to select, Escape to cancel.");
+                    speak("Omni-Jump. " + links.length + " links found. 1 of " + links.length + ": " + menuOptions[0] + ". Use arrows to select.");
                 };
+
+                const noteReq = tx.objectStore(NOTES_STORE).get(currentVerseId);
+                noteReq.onsuccess = () => { combinedContent += (noteReq.result?.content || '') + " "; processLinks(); };
+                const commReq = tx.objectStore(COMMENTARY_STORE).get(currentVerseId);
+                commReq.onsuccess = () => { combinedContent += (commReq.result?.content || '') + " "; processLinks(); };
             }
             break;
         case 'F':
@@ -800,6 +1056,31 @@ function handleInput(event) {
                 statusMessage += ` Search active: viewing match ${currentSearchResultIndex + 1} of ${searchResults.length}.`;
             }
             speak(statusMessage);
+            break;
+        }
+        case '-':
+            event.preventDefault();
+            currentFontSize = Math.max(12, currentFontSize - 2);
+            document.documentElement.style.setProperty('--base-font-size', currentFontSize + 'px');
+            speak("Text size " + currentFontSize);
+            break;
+        case '=':
+        case '+':
+            event.preventDefault();
+            currentFontSize = Math.min(72, currentFontSize + 2);
+            document.documentElement.style.setProperty('--base-font-size', currentFontSize + 'px');
+            speak("Text size " + currentFontSize);
+            break;
+        case 'T': {
+            event.preventDefault();
+            currentThemeIndex = (currentThemeIndex + 1) % THEMES.length;
+            const newTheme = THEMES[currentThemeIndex];
+            if (newTheme === 'default') {
+                document.body.removeAttribute('data-theme');
+            } else {
+                document.body.setAttribute('data-theme', newTheme);
+            }
+            speak("Theme: " + newTheme);
             break;
         }
     }
@@ -982,6 +1263,31 @@ window.addEventListener('DOMContentLoaded', () => {
         reader.readAsText(file);
         event.target.value = '';
     });
+    
+    // Commentary file import listener
+    importCommentaryEl = document.getElementById('import-commentary-file');
+    if (importCommentaryEl) {
+        importCommentaryEl.addEventListener('change', (event) => {
+            const file = event.target.files && event.target.files[0];
+            if (!file || !db) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                try {
+                    const parsed = JSON.parse(reader.result);
+                    if (!Array.isArray(parsed)) { speak("Invalid commentary format."); return; }
+                    const tx = db.transaction([COMMENTARY_STORE], "readwrite");
+                    const store = tx.objectStore(COMMENTARY_STORE);
+                    parsed.forEach(note => store.put(note));
+                    tx.oncomplete = () => speak("Commentary module loaded.");
+                } catch (error) {
+                    console.error("Import error:", error);
+                    speak("Invalid commentary file.");
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        });
+    }
 
     window.addEventListener('keydown', handleInput);
 });

@@ -57,3 +57,7 @@ node_modules/
 .env
 __pycache__/
 *.log
+
+# --- Project Databases ---
+commentaries-database/
+writings-database/

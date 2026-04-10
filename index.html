@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Accessible Bible(v0.17.1)</title>
+    <title>Accessible Bible (v0.25.0)</title>
     <style>
         /* A utility class to visually hide text while keeping it accessible to screen readers */
         .sr-only {
@@ -31,6 +32,25 @@
             padding: 1rem 2rem;
             cursor: pointer;
         }
+        :root {
+            --base-font-size: 24px;
+            --bg-color: #121212;
+            --text-color: #e0e0e0;
+            --accent-color: #4CAF50;
+        }
+        [data-theme="midnight"] { --bg-color: #000; --text-color: #fff; --accent-color: #888; }
+        [data-theme="amber"]    { --bg-color: #000; --text-color: #FFBF00; --accent-color: #FF8C00; }
+        [data-theme="macular"] { --bg-color: #FFFF00; --text-color: #000; --accent-color: #333; }
+        [data-theme="cyan"]    { --bg-color: #000; --text-color: #00FFFF; --accent-color: #008080; }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+        #content-display {
+            font-size: var(--base-font-size);
+            line-height: 1.6;
+            letter-spacing: 0.05em;
+        }
     </style>
 </head>
 <body>
@@ -49,9 +69,18 @@
         <input type="text" id="search-input" class="sr-only" aria-label="Search Query">
         <textarea id="note-editor" class="sr-only" aria-label="Verse Note"></textarea>
         <input type="file" id="import-file" class="sr-only" accept=".json">
+        <input type="file" id="import-commentary-file" class="sr-only" accept=".json">
 
         <div id="content-display" aria-hidden="true">
             </div>
+
+        <div id="visual-hud" aria-hidden="true" style="position: fixed; bottom: 0; width: 100%; padding: 10px; background: var(--bg-color); border-top: 2px solid var(--accent-color); font-family: monospace; font-size: 1.2rem;">
+            [Arrows] Navigate | [M] Note | [O] Options | [-/+] Text Size | [T] Theme
+        </div>
+        <div id="visual-alerts" aria-hidden="true" style="position: fixed; top: 20px; right: 20px; display: flex; gap: 10px;">
+            <span id="alert-note" style="display: none; padding: 10px 20px; background: var(--text-color); color: var(--bg-color); font-weight: bold; font-family: monospace;">NOTE [Up]</span>
+            <span id="alert-comm" style="display: none; padding: 10px 20px; background: var(--accent-color); color: var(--bg-color); font-weight: bold; font-family: monospace;">COMMENTARY [Shift+Up]</span>
+        </div>
     </main>
 
     <script src="app.js"></script>
