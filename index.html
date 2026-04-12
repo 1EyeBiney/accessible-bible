@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Accessible Bible (v0.26.1)</title>
+    <title>Accessible Bible (v0.27.3)</title>
     <style>
         /* A utility class to visually hide text while keeping it accessible to screen readers */
         .sr-only {
@@ -51,6 +51,10 @@
             line-height: 1.6;
             letter-spacing: 0.05em;
         }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.55; }
+        }
     </style>
 </head>
 <body>
@@ -82,6 +86,29 @@
             <span id="alert-comm" style="display: none; padding: 10px 20px; background: var(--accent-color); color: var(--bg-color); font-weight: bold; font-family: monospace;">COMMENTARY [Shift+Up]</span>
         </div>
     </main>
+
+    <div id="welcome-screen" role="application" tabindex="0" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 100; background: var(--bg-color); color: var(--text-color); user-select: none; padding: 4% 8%; box-sizing: border-box; overflow-y: auto; font-size: calc(var(--base-font-size) * 1.15); line-height: 1.6;">
+        <div style="max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; text-align: left;" aria-hidden="true">
+            <p style="margin: 0;">Welcome to Accessible Bible, a Bible for the blind.</p>
+            <p style="margin: 0;">While there are numerous ways to find God's Word online, until now, there haven't been any that foster lightning-fast navigation, personal note-taking, and expert commentary overlays for the visually impaired.</p>
+            <p style="margin: 0;">This project is the result of two blind Christians who missed the ability to write in their Bibles and wanted access to better, faster study features.</p>
+            <p style="margin: 0;">Because Accessible Bible is built for screen readers, your mouse will not work here.</p>
+            <p style="margin: 0;">You will need to navigate entirely using your keyboard. Take a deep breath. It's ok.</p>
+            <p style="margin: 0;">If you are sighted and would like to experience this exactly as we do, you can turn on the Windows built-in screen reader, called Narrator, by pressing Control, Windows, and Enter at the same time.</p>
+            <p style="margin: 0;">That's Control + Windows + Enter. Press it again to turn Narrator off.</p>
+            <p style="margin: 0;">If you are using Narrator, you may need to press Insert + Spacebar to turn off scan mode so your keyboard strokes pass directly to the Bible engine.</p>
+            <p style="margin: 0;">Don't worry if you prefer using Accessible Bible without a screen reader. It will still work fine and does offer low vision features.</p>
+
+            <div style="margin-top: 15px; padding: 15px; border: 2px dashed var(--text-color); opacity: 0.85; text-align: center; font-family: monospace; border-radius: 6px;">
+                If you would like to skip this introduction in the future, press <strong>X</strong> now to save your preference.
+            </div>
+
+            <div style="margin-top: 10px; padding: 20px; background: var(--text-color); color: var(--bg-color); border-radius: 8px; font-weight: bold; text-align: center; font-size: calc(var(--base-font-size) * 1.25); animation: pulse 2.5s infinite;">
+                To acknowledge this and enter the Bible study environment, press your <strong>Right Arrow</strong> key.
+            </div>
+        </div>
+        <audio id="welcome-audio" src="./audio/dialog/welcome.mp3"></audio>
+    </div>
 
     <script src="app.js"></script>
 </body>

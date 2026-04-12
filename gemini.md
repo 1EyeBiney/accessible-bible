@@ -92,3 +92,20 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 - **Font Scaling Keys:** `[-]` and `[=]`/`[+]` adjust `--base-font-size` by ±2px (clamped 12–72px) via `document.documentElement.style.setProperty()`.
 - **Theme Key:** `[T]` cycles `THEMES` carousel, applying `data-theme` attribute to `<body>` (or removing it for `default`).
 - **HUD Alert Integration:** `readCurrentVerse()` now hides both pills at the start of every call; `#alert-note` is shown on a successful non-empty note hit; `#alert-comm` is shown on a successful commentary hit.
+
+### v0.25.0 — Visual Reference Header Injection
+- Added standard notation (e.g., "Romans 1:1") via dynamic DOM injection to the `#content-display` for low-vision users.
+
+### v0.26.0 — Ambient Audio Expansion
+- Expanded `hymnList` to 26 tracks and updated internal grab-bag shuffle logic.
+
+### v0.27.1 — Welcome Screen Airlock (Static Text)
+- Created `isWelcomeMode` intercept after the splash screen to enforce keyboard-only navigation. Added screen reader stealth bypass (`Escape`) and local storage persistence (`skipWelcome`).
+
+### v0.27.2 — Airlock Path & ARIA Patch
+- **Audio Path (`index.html`):** Updated the `welcome-audio` source to point to `./audio/dialog/welcome.mp3`.
+- **Screen Reader Silence (`index.html`):** Applied `aria-hidden="true"` to the Welcome Screen text container to prevent TTS from automatically reading the visual orientation script.
+
+### v0.27.3 — Airlock Focus Trap & Ambient Audio Shift
+- **Focus Preservation (`index.html`, `app.js`):** Added `role="application"` and `tabindex="0"` to `#welcome-screen`, and applied `.focus()` on load to prevent screen readers (NVDA/JAWS) from dropping into Browse Mode, ensuring the `Right Arrow` key is passed to the engine.
+- **Ambient Audio Shift (`app.js`):** Modified `playNextTrack(suppressTTS = false)` and invoked it inside `startWelcomeSequence()` to begin ambient music immediately on the orientation screen without TTS collision. Removed duplicate `playNextTrack()` call from `endWelcomeSequence()`.

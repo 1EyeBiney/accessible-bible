@@ -1,6 +1,6 @@
 /**
- * Accessible Study Bible - v0.26.0
- * Visual Reference Header Injection
+ * Accessible Study Bible - v0.27.3
+ * Airlock Path & ARIA Patch
  */
 
 // --- Global State ---
@@ -61,6 +61,9 @@ const AUDIO_GAIN_BOOST = 1.45;
 let currentFontSize = 24;
 const THEMES = ['default', 'midnight', 'amber', 'macular', 'cyan'];
 let currentThemeIndex = 0;
+let isWelcomeMode = false;
+let skipWelcome = localStorage.getItem('skipWelcome') === 'true';
+let welcomeAudioEl = null;
 
 const hymnList = [
     'a_mighty_fortress_is_our_god1.mp3', 'a_mighty_fortress_is_our_god2.mp3',
@@ -442,7 +445,7 @@ function formatSongTitle(filename) {
     return base.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
 
-function playNextTrack() {
+function playNextTrack(suppressTTS = false) {
     const standbyAudio = activeAudio === audioA ? audioB : audioA;
     const previousAudio = activeAudio;
     const targetVolume = volumeStages[currentVolumeIndex];
@@ -458,7 +461,10 @@ function playNextTrack() {
     standbyAudio.currentTime = 0;
     standbyAudio.src = `./audio/hymns/${nextTrack}`;
     standbyAudio.volume = 0;
-    speak("Now playing " + formatSongTitle(nextTrack));
+    
+    if (!suppressTTS) {
+        speak("Now playing " + formatSongTitle(nextTrack));
+    }
 
     const playPromise = standbyAudio.play();
     if (playPromise && typeof playPromise.catch === 'function') {
@@ -558,6 +564,25 @@ function handleInput(event) {
         return;
     }
     if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return;
+
+    if (isWelcomeMode) {
+        event.preventDefault(); // Kill all default browser actions
+        const key = event.key;
+
+        if (key === 'Escape' || key === 'ArrowRight') {
+            endWelcomeSequence();
+            return;
+        }
+
+        if (key.toUpperCase() === 'X') {
+            localStorage.setItem('skipWelcome', 'true');
+            speak("Preference saved. Skipping orientation.");
+            endWelcomeSequence();
+            return;
+        }
+
+        return; // Swallow all other keys completely
+    }
 
     const key = event.key;
     const keyUpper = key.toUpperCase();
@@ -1098,6 +1123,43 @@ function handleInput(event) {
     }
 }
 
+function startWelcomeSequence() {
+    isWelcomeMode = true;
+    document.getElementById('splash-screen').style.display = 'none';
+    
+    const welcomeEl = document.getElementById('welcome-screen');
+    welcomeEl.style.display = 'block';
+    welcomeEl.focus(); // Pass the baton to keep NVDA in Focus Mode
+    
+    // Start ambient music silently (no TTS interruption)
+    playNextTrack(true);
+    
+    // Stealth TTS Bypass for Screen Readers
+    speak("Orientation active. Press Escape to skip to the study environment.");
+    
+    // Delay ElevenLabs audio slightly so TTS finishes the bypass instruction
+    setTimeout(() => {
+        if (!isWelcomeMode) return; // In case they skipped instantly
+        welcomeAudioEl = document.getElementById('welcome-audio');
+        if (welcomeAudioEl) welcomeAudioEl.play().catch(e => console.warn("Welcome audio blocked", e));
+    }, 2000);
+}
+
+function endWelcomeSequence() {
+    isWelcomeMode = false;
+    if (welcomeAudioEl) {
+        welcomeAudioEl.pause();
+        welcomeAudioEl.currentTime = 0;
+    }
+    document.getElementById('welcome-screen').style.display = 'none';
+
+    // Proceed to standard boot
+    document.getElementById('app-container').style.display = 'block';
+    document.getElementById('focus-trap').focus();
+    speak("Study environment initialized. Use arrows to navigate. Press M to edit note.");
+    setTimeout(() => initDatabase(), 100);
+}
+
 window.addEventListener('DOMContentLoaded', () => {
     const initButton = document.getElementById('init-button');
     const appContainer = document.getElementById('app-container');
@@ -1111,13 +1173,18 @@ window.addEventListener('DOMContentLoaded', () => {
     function activateEngine() {
         isInitialized = true;
         initAudio();
-        playNextTrack();
-        splashScreen.style.display = 'none';
-        appContainer.style.display = 'block';
-        focusTrap.focus();
         console.log("Engine Active");
-        speak("Study environment initialized. Use arrows to navigate. Press M to edit note.");
-        setTimeout(() => initDatabase(), 100);
+
+        if (skipWelcome) {
+            document.getElementById('splash-screen').style.display = 'none';
+            document.getElementById('app-container').style.display = 'block';
+            focusTrap.focus();
+            playNextTrack();
+            speak("Study environment initialized. Use arrows to navigate. Press M to edit note.");
+            setTimeout(() => initDatabase(), 100);
+        } else {
+            startWelcomeSequence();
+        }
     }
 
     initButton.addEventListener('click', activateEngine);
