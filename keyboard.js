@@ -6,7 +6,7 @@ import {
 import { 
     playNextTrack, cycleVolume, playTone, silenceBootAudio 
 } from './audio.js';
-import { helpMenuData, NOTES_STORE, COMMENTARY_STORE, THEMES } from './config.js';
+import { helpMenuData, NOTES_STORE, COMMENTARY_STORE, THEMES, muteTutorialPrompt, setMuteTutorialPrompt } from './config.js';
 
 // --- Mode State ---
 export let isBookSearchMode = false;
@@ -496,7 +496,7 @@ export function handleInput(event) {
         case 'H':
             event.preventDefault();
             if (event.shiftKey) {
-                muteTutorialPrompt = !muteTutorialPrompt;
+                setMuteTutorialPrompt(!muteTutorialPrompt);
                 localStorage.setItem('muteTutorialPrompt', muteTutorialPrompt.toString());
                 speak(muteTutorialPrompt ? "Tutorial prompt muted." : "Tutorial prompt enabled.");
             } else {

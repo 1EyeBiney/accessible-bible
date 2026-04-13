@@ -3,7 +3,7 @@
  * Audio Codex overlay, boot silencer, and media player logic
  */
 
-import { DB_NAME, DB_VERSION, TEXT_STORE, NOTES_STORE, BOOKMARKS_STORE, COMMENTARY_STORE, helpMenuData, AUDIO_GAIN_BOOST, THEMES, tutorialChapters, hymnList, volumeStages } from './config.js';
+import { DB_NAME, DB_VERSION, TEXT_STORE, NOTES_STORE, BOOKMARKS_STORE, COMMENTARY_STORE, helpMenuData, AUDIO_GAIN_BOOST, THEMES, tutorialChapters, hymnList, volumeStages, muteTutorialPrompt } from './config.js';
 import { speak, announcer } from './ui.js';
 import {
     initAudio, playTone, playSequence, playNoteIndicator, playCommentaryCue,
@@ -42,7 +42,6 @@ let tutorialScreenEl = null;
 let tutorialTitleEl = null;
 let tutorialAudioEl = null;
 let currentTutorialIndex = 0;
-let muteTutorialPrompt = localStorage.getItem('muteTutorialPrompt') === 'true';
 const onTrackEnded = () => playNextTrack();
 
 export function updateVerseIndex(val) { currentVerseIndex = val; }
