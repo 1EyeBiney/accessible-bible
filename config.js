@@ -4,6 +4,7 @@ export const TEXT_STORE = "bibleText";
 export const NOTES_STORE = "userNotes";
 export const BOOKMARKS_STORE = "userBookmarks";
 export const COMMENTARY_STORE = "expertCommentary";
+export let muteTutorialPrompt = localStorage.getItem('muteTutorialPrompt') === 'true';
 
 export const helpMenuData = [
     "Help Menu: Use up and down arrows to navigate, Escape to close.",
