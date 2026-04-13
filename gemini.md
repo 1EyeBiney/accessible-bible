@@ -1,4 +1,4 @@
-# ACCESSIBLE BIBLE ENGINE: MASTER WATCHDOG DIRECTIVE (v0.31.2)
+# ACCESSIBLE BIBLE ENGINE: MASTER WATCHDOG DIRECTIVE (v0.33.0)
 
 ## SYSTEM INSTRUCTION:
 You are the Systems Architect for a high-performance, keyboard-centric Bible study tool. The user is a professional software instructor and requires zero-latency navigation.
@@ -143,3 +143,22 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 ### v0.31.2 — Audio Codex Function Sync
 **app.js**: Exported playTutorialChapter to allow the keyboard router to trigger specific training modules when opening the Audio Codex overlay.
 **keyboard.js**: Imported the playTutorialChapter function from the main engine to resolve the ReferenceError occurring during the initial boot of the tutorial player.
+
+### v0.31.3 — Dynamic Boot Persistence
+**app.js**: Implemented a state-tracking system using localStorage to persist the last-viewed verse index and the most recent bookmark ID without requiring a database migration.
+**app.js**: Refactored the engine initialization handshake to intercept the boot sequence and jump to a user-preferred location (Genesis, Matthew, Last Spot, or Last Bookmark) based on saved preferences.
+**keyboard.js**: Enhanced the Options Menu with a cycling preference toggle, allowing users to use the Spacebar to rotate through boot choices and Enter to commit settings.
+
+### v0.31.4 — Instructional Menu Audio
+**keyboard.js**: Refactored menu navigation logic to append "use spacebar to change" instructions specifically when the user moves focus to the Boot Location setting.
+**Architecture**: Decoupled instructional prompts from state-change announcements to ensure that cycling settings only speaks the active value, preventing audio clutter during rapid interaction.
+
+### v0.32.0 — Alpha-Numeric Book Search Sync
+**keyboard.js**: Refactored the book search logic to ignore leading digits (1, 2, 3) and spaces during first-letter filtering, ensuring books like 1 Corinthians and 2 Samuel are discoverable via their primary alpha character.
+**keyboard.js**: Optimized the search cycling algorithm to ensure repeated key presses correctly advance through all matching books regardless of numeric prefixes.
+**Architecture**: Established a name-normalization standard for real-time filtering that preserves the original canonical name for display and audio output.
+
+### v0.33.0 — Clipboard API & Menu Safety
+**app.js**: Created a centralized copyToClipboard utility with safety checks and error handling to manage verse exports to the system clipboard.
+**keyboard.js**: Integrated the new clipboard utility into the Verse Menu (Down Arrow), resolving the TypeError caused by accessing the clipboard API in an undefined state.
+**Architecture**: Standardized the clipboard interface to provide audio feedback for both successful copies and API failures, ensuring a consistent experience for screen reader users.

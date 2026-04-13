@@ -81,6 +81,18 @@ export function toggleWelcomeMode(val) { isWelcomeMode = val; }
 export function toggleTutorialMode(val) { isTutorialMode = val; }
 export function setWelcomeMode(val) { isWelcomeMode = val; }
 export function setTutorialMode(val) { isTutorialMode = val; }
+export function copyToClipboard(text) {
+    if (!navigator.clipboard) {
+        speak("Clipboard error: Secure context required.");
+        return;
+    }
+    navigator.clipboard.writeText(text).then(() => {
+        speak("Verse copied to clipboard.");
+    }).catch(err => {
+        speak("Clipboard failed.");
+        console.error(err);
+    });
+}
 
 const splashScreen = document.getElementById('splash-screen');
 const focusTrap = document.getElementById('focus-trap');

@@ -10,7 +10,7 @@ import {
     startWelcomeSequence, endWelcomeSequence, startTutorialSequence, endTutorialSequence,
     updateTutorialChapter, playTutorialChapter, getKeyboardExplorerDescription, navigateBookmarks,
     toggleCurrentBookmark, parseLinkTarget, isWelcomeMode, isTutorialMode, setWelcomeMode, setTutorialMode,
-    bootOptions, bootPreference, cycleBootPreference
+    bootOptions, bootPreference, cycleBootPreference, copyToClipboard
 } from './app.js';
 import { 
     memoryCache, db, bookmarksCache, loadToMemory 
@@ -227,15 +227,10 @@ export function handleInput(event) {
             }
 
             if (selected === 'Copy Verse') {
-                navigator.clipboard.writeText(memoryCache[currentVerseIndex].text)
-                    .then(() => {
-                        isMenuMode = false;
-                        speak("Verse copied to clipboard.");
-                    })
-                    .catch(() => {
-                        isMenuMode = false;
-                        speak("Clipboard unavailable.");
-                    });
+                const v = memoryCache[currentVerseIndex];
+                const fullText = v.book_name + " " + v.chapter + ":" + v.verse + " - " + v.text;
+                isMenuMode = false;
+                copyToClipboard(fullText);
                 return;
             }
 
