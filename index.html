@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -123,6 +122,22 @@
         <audio id="tutorial-audio"></audio>
     </div>
 
-    <script src="app.js"></script>
+    <script>
+        window.addEventListener('error', function(event) {
+            const errorMsg = "Engine Error: " + event.message + " on line " + event.lineno;
+            
+            // 1. Wipe the screen and print it visually
+            document.body.innerHTML = "<div style='padding: 50px; background: black; color: red; font-size: 32px; font-family: monospace; z-index: 9999; position: relative;'>" + errorMsg + "</div>";
+            
+            // 2. Send it straight to the screen reader
+            setTimeout(() => {
+                const announcer = document.getElementById('aria-announcer');
+                if (announcer) {
+                    announcer.textContent = errorMsg;
+                }
+            }, 1000);
+        });
+    </script>
+    <script type="module" src="app.js"></script>
 </body>
 </html>
