@@ -370,7 +370,7 @@ export function endWelcomeSequence() {
     playNextTrack(true);
     const helperText = muteTutorialPrompt ? "" : " Press H for audio tutorial, or Shift plus H to mute this prompt.";
     speak("Study environment initialized. Use arrows to navigate. Press M to edit note." + helperText);
-    setTimeout(() => initDatabase(), 100);
+    setTimeout(() => initDatabase(() => setIsReady(true)), 100);
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -404,7 +404,7 @@ window.addEventListener('DOMContentLoaded', () => {
             playNextTrack(true);
             const helperText = muteTutorialPrompt ? "" : " Press H for audio tutorial, or Shift plus H to mute this prompt.";
             speak("Study environment initialized. Use arrows to navigate. Press M to edit note." + helperText);
-            setTimeout(() => initDatabase(), 100);
+            setTimeout(() => initDatabase(() => setIsReady(true)), 100);
         } else {
             startWelcomeSequence();
         }

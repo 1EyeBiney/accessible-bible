@@ -1,4 +1,4 @@
-# ACCESSIBLE BIBLE ENGINE: MASTER WATCHDOG DIRECTIVE (v0.28.0)
+# ACCESSIBLE BIBLE ENGINE: MASTER WATCHDOG DIRECTIVE (v0.30.8)
 
 ## SYSTEM INSTRUCTION:
 You are the Systems Architect for a high-performance, keyboard-centric Bible study tool. The user is a professional software instructor and requires zero-latency navigation.
@@ -117,3 +117,11 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 - **Tutorial UI (`index.html`):** Added `#tutorial-screen` (role application + tabindex) with title region and embedded `#tutorial-audio` media element for keyboard-only training playback.
 - **Playlist Definition (`app.js`):** Added `tutorialChapters` array with the eight chapter tracks in `audio/dialog/` and chapter titles for deterministic tutorial navigation.
 - **Key Commands (`app.js`):** `H` opens the Audio Codex player; `Shift + H` toggles tutorial prompt mute/unmute. Tutorial mode supports `Space` (play/pause), `Left/Right` (seek), `Up/Down` (chapter cycle), and `Escape` (return to study environment).
+
+### v0.30.7 — The Shadowing Fix
+- **`app.js`:** Removed the redundant local declaration of `muteTutorialPrompt` to resolve the SyntaxError that was blocking the engine from booting.
+- **`keyboard.js`:** Resolved the ReferenceError by ensuring the tutorial prompt state is strictly managed through the central configuration module.
+
+### v0.30.8 — The Ready-State Handshake
+- **`app.js`:** Updated the `activateEngine` and `endWelcomeSequence` functions to pass a completion callback to the database engine, ensuring the `isReady` state is set to true only after the memory cache is fully populated.
+- **Architecture:** Synchronized the ready-state across all modules to ensure the keyboard router can successfully trigger verse readouts after the library is loaded.
