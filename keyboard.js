@@ -4,6 +4,8 @@ import {
     updateVerseIndex, updateBookName, setIsReady, toggleWelcomeMode, toggleTutorialMode,
     currentThemeIndex, currentFontSize, anchoredVerseIndex, navigationHistory,
     setCurrentThemeIndex, setCurrentFontSize, setAnchoredVerseIndex,
+    searchInputEl, noteEditorEl, importFileEl, importCommentaryEl, tutorialAudioEl,
+    currentTutorialIndex, setCurrentTutorialIndex,
     readCurrentVerse, jumpTo, openNoteEditorForCurrentVerse,
     startWelcomeSequence, endWelcomeSequence, startTutorialSequence, endTutorialSequence,
     updateTutorialChapter, getKeyboardExplorerDescription, navigateBookmarks,
