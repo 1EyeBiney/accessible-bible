@@ -28,6 +28,12 @@ bibleArray.forEach(verse => {
             // Target 1: The "b" hallucination (Finds standalone 'bb', 'bbb', etc.)
             .replace(/\b[bB]{2,}\b/g, '') 
             
+            // NEW Target: The "v" hallucination (Finds standalone 'vv', 'vvv', etc.)
+            .replace(/\b[vV]{2,}\b/g, '') 
+            
+            // NEW Target: Strip leading hyphens at the very beginning of a verse
+            .replace(/^\s*-\s*/g, '')
+            
             // Target 2: Strip brackets but leave the word inside (e.g. "[it]" becomes "it")
             .replace(/\[|\]/g, '') 
             

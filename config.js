@@ -1,5 +1,5 @@
 export const DB_NAME = "BibleStudyDB";
-export const DB_VERSION = 6;
+export const DB_VERSION = 7;
 export const TEXT_STORE = "bibleText";
 export const NOTES_STORE = "userNotes";
 export const BOOKMARKS_STORE = "userBookmarks";

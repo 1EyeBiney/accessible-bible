@@ -54,7 +54,7 @@ function checkAndLoadData(callback) {
 }
 
 function fetchBibleJSON(callback) {
-    fetch('bsb1.json')
+    fetch('bsb2.json')
         .then(response => response.json())
         .then(data => {
             const transaction = db.transaction([TEXT_STORE], "readwrite");
