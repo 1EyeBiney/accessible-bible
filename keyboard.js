@@ -20,6 +20,18 @@ import {
 } from './audio.js';
 import { helpMenuData, NOTES_STORE, COMMENTARY_STORE, THEMES, muteTutorialPrompt, setMuteTutorialPrompt } from './config.js';
 
+const visualBuffer = document.getElementById('visual-buffer');
+
+function updateVisualBuffer(modeText, valueText) {
+    if (!visualBuffer) return;
+    if (!modeText) {
+        visualBuffer.style.display = 'none';
+    } else {
+        visualBuffer.style.display = 'block';
+        visualBuffer.textContent = modeText + (valueText ? ": " + valueText : "...");
+    }
+}
+
 // --- Mode State ---
 export let isBookSearchMode = false;
 export let lastSearchLetter = '';
@@ -45,6 +57,7 @@ export function clearAllModes() {
     inputBuffer = ''; lastSearchLetter = '';
     lastBookSearchKey = '';
     currentBookSearchIndex = 0;
+    updateVisualBuffer(null);
 }
 
 export function setSearchMode(value) { isSearchMode = value; }
@@ -424,6 +437,7 @@ export function handleInput(event) {
         if (/^[0-9]$/.test(key)) {
             event.preventDefault();
             inputBuffer += key;
+            updateVisualBuffer(isChapterMode ? "Chapter Jump" : "Verse Jump", inputBuffer);
             speak(key);
             return;
         }
@@ -478,6 +492,7 @@ export function handleInput(event) {
         }
 
         const targetBook = matchingBooks[currentBookSearchIndex];
+        updateVisualBuffer("Book", targetBook);
         const firstVerseIdx = memoryCache.findIndex(v => v.book_name === targetBook);
         if (firstVerseIdx !== -1) {
             updateVerseIndex(firstVerseIdx);
@@ -555,6 +570,7 @@ export function handleInput(event) {
             if (!isReady) break;
             clearAllModes();
             isBookSearchMode = true;
+            updateVisualBuffer("Book Search", "Type a letter");
             speak("Book Search. Press a letter.");
             break;
         case 'R': {
@@ -647,6 +663,7 @@ export function handleInput(event) {
             if (!isReady) break;
             clearAllModes();
             isChapterMode = true;
+            updateVisualBuffer("Chapter Jump", "Type a number");
             speak("Chapter search. Enter numbers.");
             break;
         case 'V':
@@ -657,6 +674,7 @@ export function handleInput(event) {
                 if (!isReady) break;
                 clearAllModes();
                 isVerseMode = true;
+                updateVisualBuffer("Verse Jump", "Type a number");
                 speak("Verse search. Enter numbers.");
             }
             break;
