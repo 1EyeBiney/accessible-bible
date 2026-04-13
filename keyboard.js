@@ -23,6 +23,8 @@ import { helpMenuData, NOTES_STORE, COMMENTARY_STORE, THEMES, muteTutorialPrompt
 // --- Mode State ---
 export let isBookSearchMode = false;
 export let lastSearchLetter = '';
+export let lastBookSearchKey = '';
+export let currentBookSearchIndex = 0;
 export let inputBuffer = '';
 export let isChapterMode = false;
 export let isVerseMode = false;
@@ -41,6 +43,8 @@ export function clearAllModes() {
     isSearchMode = false; isNoteMode = false; isMenuMode = false;
     isHelpMode = false; isKeyboardExplorer = false;
     inputBuffer = ''; lastSearchLetter = '';
+    lastBookSearchKey = '';
+    currentBookSearchIndex = 0;
 }
 
 export function setSearchMode(value) { isSearchMode = value; }
@@ -457,33 +461,35 @@ export function handleInput(event) {
         if (keyUpper === 'ENTER' || keyUpper === 'ESCAPE' || !/^[A-Z]$/.test(keyUpper)) {
             isBookSearchMode = false;
             lastSearchLetter = '';
+            lastBookSearchKey = '';
+            currentBookSearchIndex = 0;
             speak("Search closed.");
             return;
         }
         event.preventDefault();
-        const letter = keyUpper;
-        const uniqueBooks = [];
-        const seen = new Set();
-        for (const v of memoryCache) {
-            if (!seen.has(v.book_name)) {
-                seen.add(v.book_name);
-                uniqueBooks.push(v.book_name);
-            }
-        }
-        const matches = uniqueBooks.filter(b => b[0].toUpperCase() === letter);
-        if (matches.length === 0) {
+        const searchKey = key.toLowerCase();
+        const matchingBooks = [...new Set(memoryCache.map(v => v.book_name))].filter(name => {
+            const cleanName = name.replace(/^[1-3\s]+/, "").toLowerCase();
+            return cleanName.startsWith(searchKey);
+        });
+        if (matchingBooks.length === 0) {
             speak("No book found for that letter.");
             return;
         }
-        let targetBook;
-        if (lastSearchLetter !== letter) {
-            targetBook = matches[0];
+        if (searchKey === lastBookSearchKey) {
+            currentBookSearchIndex = (currentBookSearchIndex + 1) % matchingBooks.length;
         } else {
-            const curIdx = matches.indexOf(currentBookName);
-            targetBook = (curIdx === -1 || curIdx === matches.length - 1) ? matches[0] : matches[curIdx + 1];
+            currentBookSearchIndex = 0;
         }
-        lastSearchLetter = letter;
-        jumpTo(targetBook, 1, 1);
+
+        const targetBook = matchingBooks[currentBookSearchIndex];
+        const firstVerseIdx = memoryCache.findIndex(v => v.book_name === targetBook);
+        if (firstVerseIdx !== -1) {
+            updateVerseIndex(firstVerseIdx);
+            readCurrentVerse(true);
+        }
+        lastBookSearchKey = searchKey;
+        lastSearchLetter = searchKey;
         return;
     }
 
