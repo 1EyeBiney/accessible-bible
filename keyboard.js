@@ -1,5 +1,12 @@
 import { speak } from './ui.js';
-import { currentVerseIndex, currentBookName, isReady, isInitialized, updateVerseIndex, updateBookName, readCurrentVerse, jumpTo, endWelcomeSequence, endTutorialSequence, updateTutorialChapter, getKeyboardExplorerDescription, navigateBookmarks, toggleCurrentBookmark, openNoteEditorForCurrentVerse, parseLinkTarget } from './app.js';
+import {
+    currentVerseIndex, currentBookName, isReady, isInitialized,
+    updateVerseIndex, updateBookName, setIsReady, toggleWelcomeMode, toggleTutorialMode,
+    readCurrentVerse, jumpTo, openNoteEditorForCurrentVerse,
+    startWelcomeSequence, endWelcomeSequence, startTutorialSequence, endTutorialSequence,
+    updateTutorialChapter, getKeyboardExplorerDescription, navigateBookmarks,
+    toggleCurrentBookmark, parseLinkTarget, isWelcomeMode, isTutorialMode, setWelcomeMode, setTutorialMode
+} from './app.js';
 import { 
     memoryCache, db, bookmarksCache, loadToMemory 
 } from './db.js';
@@ -19,8 +26,6 @@ export let isNoteMode = false;
 export let isMenuMode = false;
 export let isKeyboardExplorer = false;
 export let isHelpMode = false;
-export let isWelcomeMode = false;
-export let isTutorialMode = false;
 export let searchResults = [];
 export let currentSearchResultIndex = -1;
 export let menuOptions = [];
@@ -37,8 +42,6 @@ export function setSearchMode(value) { isSearchMode = value; }
 export function setNoteMode(value) { isNoteMode = value; }
 export function getSearchMode() { return isSearchMode; }
 export function getNoteMode() { return isNoteMode; }
-export function setWelcomeMode(val) { isWelcomeMode = val; }
-export function setTutorialMode(val) { isTutorialMode = val; }
 
 export function handleInput(event) {
     if (!isInitialized) {

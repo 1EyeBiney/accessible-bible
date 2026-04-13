@@ -11,7 +11,7 @@ import {
     audioCtx, audioA, audioB, activeAudio, currentVolumeIndex, crossfadeTimer
 } from './audio.js';
 import { db, memoryCache, bookmarksCache, initDatabase, loadBookmarks, loadToMemory, setMemoryCache } from './db.js';
-import { handleInput, clearAllModes, setSearchMode, setNoteMode, getSearchMode, getNoteMode, isWelcomeMode, isTutorialMode, setWelcomeMode, setTutorialMode } from './keyboard.js';
+import { handleInput, clearAllModes, setSearchMode, setNoteMode, getSearchMode, getNoteMode } from './keyboard.js';
 
 // --- Global State ---
 export let currentVerseIndex = 0; 
@@ -36,8 +36,10 @@ let importFileEl = null;
 let importCommentaryEl = null;
 let currentFontSize = 24;
 let currentThemeIndex = 0;
+export let isWelcomeMode = false;
 let skipWelcome = localStorage.getItem('skipWelcome') === 'true';
 let welcomeAudioEl = null;
+export let isTutorialMode = false;
 let tutorialScreenEl = null;
 let tutorialTitleEl = null;
 let tutorialAudioEl = null;
@@ -47,6 +49,10 @@ const onTrackEnded = () => playNextTrack();
 export function updateVerseIndex(val) { currentVerseIndex = val; }
 export function updateBookName(val) { currentBookName = val; }
 export function setIsReady(val) { isReady = val; }
+export function toggleWelcomeMode(val) { isWelcomeMode = val; }
+export function toggleTutorialMode(val) { isTutorialMode = val; }
+export function setWelcomeMode(val) { isWelcomeMode = val; }
+export function setTutorialMode(val) { isTutorialMode = val; }
 
 const splashScreen = document.getElementById('splash-screen');
 const focusTrap = document.getElementById('focus-trap');
@@ -244,7 +250,7 @@ function playTutorialChapter(index) {
     updateTutorialChapter(index, true);
 }
 
-function startTutorialSequence() {
+export function startTutorialSequence() {
     setTutorialMode(true);
     silenceBootAudio();
 
@@ -329,7 +335,7 @@ export function getKeyboardExplorerDescription(event) {
     return keyName + ': No mapped engine command.';
 }
 
-function startWelcomeSequence() {
+export function startWelcomeSequence() {
     setWelcomeMode(true);
     document.getElementById('splash-screen').style.display = 'none';
     
