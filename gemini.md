@@ -1,4 +1,4 @@
-# ACCESSIBLE BIBLE ENGINE: MASTER WATCHDOG DIRECTIVE (v0.30.8)
+# ACCESSIBLE BIBLE ENGINE: MASTER WATCHDOG DIRECTIVE (v0.31.2)
 
 ## SYSTEM INSTRUCTION:
 You are the Systems Architect for a high-performance, keyboard-centric Bible study tool. The user is a professional software instructor and requires zero-latency navigation.
@@ -125,3 +125,21 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 ### v0.30.8 — The Ready-State Handshake
 - **`app.js`:** Updated the `activateEngine` and `endWelcomeSequence` functions to pass a completion callback to the database engine, ensuring the `isReady` state is set to true only after the memory cache is fully populated.
 - **Architecture:** Synchronized the ready-state across all modules to ensure the keyboard router can successfully trigger verse readouts after the library is loaded.
+
+### v0.30.9 — Visual and Relational State Sync
+**app.js**: Exported currentThemeIndex, currentFontSize, and anchoredVerseIndex while implementing setter functions to permit the keyboard module to manage visual preferences and relational anchors.
+**keyboard.js**: Refactored theme switching, font scaling, and verse anchoring logic to utilize imported setters, resolving ReferenceErrors and strict-mode assignment violations.
+**Architecture**: Synchronized the navigation history stack between modules to ensure breadcrumb backtracking remains functional across the modular boundary.
+
+### v0.31.0 — The DOM Reference Sync
+**app.js**: Exported DOM element references for the search input, note editor, and file importers along with tutorial state variables to ensure the keyboard router can manipulate interface elements.
+**keyboard.js**: Integrated imported DOM references and tutorial state handlers to resolve ReferenceErrors during mode activation and audio codex navigation.
+
+### v0.31.1 — Search State Sync
+**keyboard.js**: Exported setters for searchResults and currentSearchResultIndex to allow external modules to populate the search carousel.
+**app.js**: Refactored the search input handler to update the central search state in keyboard.js, ensuring the bracket navigation keys have access to the filtered results.
+**Architecture**: Removed duplicate search state variables from app.js to prevent local variable shadowing.
+
+### v0.31.2 — Audio Codex Function Sync
+**app.js**: Exported playTutorialChapter to allow the keyboard router to trigger specific training modules when opening the Audio Codex overlay.
+**keyboard.js**: Imported the playTutorialChapter function from the main engine to resolve the ReferenceError occurring during the initial boot of the tutorial player.

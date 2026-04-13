@@ -42,7 +42,33 @@ let tutorialScreenEl = null;
 let tutorialTitleEl = null;
 export let tutorialAudioEl = null;
 export let currentTutorialIndex = 0;
+export let bootOptions = ['Last Spot', 'Genesis', 'Matthew', 'Last Bookmark'];
+export let bootPreference = localStorage.getItem('bootPreference') || 'Last Spot';
 const onTrackEnded = () => playNextTrack();
+
+export function cycleBootPreference() {
+    const idx = bootOptions.indexOf(bootPreference);
+    bootPreference = bootOptions[(idx + 1) % bootOptions.length];
+    localStorage.setItem('bootPreference', bootPreference);
+    speak("Boot location: " + bootPreference);
+}
+
+export function executeBootJump() {
+    if (bootPreference === 'Genesis') {
+        updateVerseIndex(0);
+    } else if (bootPreference === 'Matthew') {
+        const mattIdx = memoryCache.findIndex(v => v.book_name === 'Matthew' && v.chapter === 1 && v.verse === 1);
+        if (mattIdx !== -1) updateVerseIndex(mattIdx);
+    } else if (bootPreference === 'Last Spot') {
+        const lastIdx = parseInt(localStorage.getItem('lastSpotIndex'), 10);
+        if (!isNaN(lastIdx)) updateVerseIndex(lastIdx);
+    } else if (bootPreference === 'Last Bookmark') {
+        const lastBookId = localStorage.getItem('lastBookmarkId');
+        const foundIdx = memoryCache.findIndex(v => v.id === lastBookId);
+        if (foundIdx !== -1) updateVerseIndex(foundIdx);
+    }
+    readCurrentVerse(true);
+}
 
 export function updateVerseIndex(val) { currentVerseIndex = val; }
 export function updateBookName(val) { currentBookName = val; }
@@ -69,6 +95,7 @@ export function toggleCurrentBookmark() {
 
     if (existingIndex !== -1) {
         store.delete(verseId);
+        localStorage.removeItem('lastBookmarkId');
         bookmarksCache.splice(existingIndex, 1);
         currentBookmarkIndex = bookmarksCache.length === 0
             ? -1
@@ -83,6 +110,7 @@ export function toggleCurrentBookmark() {
     }
 
     store.put({ id: verseId });
+    localStorage.setItem('lastBookmarkId', verseId);
     bookmarksCache.push(verseId);
     bookmarksCache.sort((a, b) => a - b);
     currentBookmarkIndex = bookmarksCache.indexOf(verseId);
@@ -372,7 +400,7 @@ export function endWelcomeSequence() {
     playNextTrack(true);
     const helperText = muteTutorialPrompt ? "" : " Press H for audio tutorial, or Shift plus H to mute this prompt.";
     speak("Study environment initialized. Use arrows to navigate. Press M to edit note." + helperText);
-    setTimeout(() => initDatabase(() => setIsReady(true)), 100);
+    setTimeout(() => initDatabase(() => { setIsReady(true); executeBootJump(); }), 100);
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -406,7 +434,7 @@ window.addEventListener('DOMContentLoaded', () => {
             playNextTrack(true);
             const helperText = muteTutorialPrompt ? "" : " Press H for audio tutorial, or Shift plus H to mute this prompt.";
             speak("Study environment initialized. Use arrows to navigate. Press M to edit note." + helperText);
-            setTimeout(() => initDatabase(() => setIsReady(true)), 100);
+            setTimeout(() => initDatabase(() => { setIsReady(true); executeBootJump(); }), 100);
         } else {
             startWelcomeSequence();
         }
@@ -602,4 +630,8 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     window.addEventListener('keydown', handleInput);
+});
+
+window.addEventListener('beforeunload', () => {
+    if (isInitialized) localStorage.setItem('lastSpotIndex', currentVerseIndex);
 });

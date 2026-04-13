@@ -9,7 +9,8 @@ import {
     readCurrentVerse, jumpTo, openNoteEditorForCurrentVerse,
     startWelcomeSequence, endWelcomeSequence, startTutorialSequence, endTutorialSequence,
     updateTutorialChapter, playTutorialChapter, getKeyboardExplorerDescription, navigateBookmarks,
-    toggleCurrentBookmark, parseLinkTarget, isWelcomeMode, isTutorialMode, setWelcomeMode, setTutorialMode
+    toggleCurrentBookmark, parseLinkTarget, isWelcomeMode, isTutorialMode, setWelcomeMode, setTutorialMode,
+    bootOptions, bootPreference, cycleBootPreference
 } from './app.js';
 import { 
     memoryCache, db, bookmarksCache, loadToMemory 
@@ -186,6 +187,14 @@ export function handleInput(event) {
             currentMenuIndex = (currentMenuIndex - 1 + menuOptions.length) % menuOptions.length;
             speak((currentMenuIndex + 1) + " of " + menuOptions.length + ": " + menuOptions[currentMenuIndex]);
             return;
+        }
+
+        if (key === ' ') {
+            if (menuOptions[currentMenuIndex].startsWith('Boot Location')) {
+                cycleBootPreference();
+                menuOptions[currentMenuIndex] = 'Boot Location: ' + bootPreference;
+                return;
+            }
         }
 
         if (key === 'Enter') {
@@ -528,9 +537,9 @@ export function handleInput(event) {
             if (!isReady) break;
             clearAllModes();
             isMenuMode = true;
-            menuOptions = ['Export Personal Notes', 'Import Personal Notes', 'Import Commentary', 'Clear Commentary'];
+            menuOptions = ['Export Personal Notes', 'Import Personal Notes', 'Import Commentary', 'Clear Commentary', 'Boot Location: ' + bootPreference];
             currentMenuIndex = 0;
-            speak("Options Menu. 1 of 4: Export Personal Notes. Up and down arrows to navigate, Enter to select, Escape to close.");
+            speak("Options Menu. 1 of 5: Export Personal Notes. Up and down arrows to navigate, Enter to select, Escape to close.");
             break;
         case 'B':
             event.preventDefault();
