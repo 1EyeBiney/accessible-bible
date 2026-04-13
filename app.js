@@ -4,6 +4,7 @@
  */
 
 import { DB_NAME, DB_VERSION, TEXT_STORE, NOTES_STORE, BOOKMARKS_STORE, COMMENTARY_STORE, helpMenuData, AUDIO_GAIN_BOOST, THEMES, tutorialChapters, hymnList, volumeStages } from './config.js';
+import { speak, announcer } from './ui.js';
 
 // --- Global State ---
 let db;
@@ -58,17 +59,8 @@ let currentVolumeIndex = 2;
 let crossfadeTimer = null;
 const onTrackEnded = () => playNextTrack();
 
-const announcer = document.getElementById('aria-announcer');
 const splashScreen = document.getElementById('splash-screen');
 const focusTrap = document.getElementById('focus-trap');
-
-// --- Utility: ARIA Announcer ---
-function speak(message) {
-    announcer.textContent = '';
-    setTimeout(() => {
-        announcer.textContent = message;
-    }, 50); 
-}
 
 function initAudio() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
