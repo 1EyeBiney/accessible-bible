@@ -2,6 +2,8 @@ import { speak } from './ui.js';
 import {
     currentVerseIndex, currentBookName, isReady, isInitialized,
     updateVerseIndex, updateBookName, setIsReady, toggleWelcomeMode, toggleTutorialMode,
+    currentThemeIndex, currentFontSize, anchoredVerseIndex, navigationHistory,
+    setCurrentThemeIndex, setCurrentFontSize, setAnchoredVerseIndex,
     readCurrentVerse, jumpTo, openNoteEditorForCurrentVerse,
     startWelcomeSequence, endWelcomeSequence, startTutorialSequence, endTutorialSequence,
     updateTutorialChapter, getKeyboardExplorerDescription, navigateBookmarks,
@@ -541,7 +543,7 @@ export function handleInput(event) {
                 return;
             }
             if (!isReady) break;
-            anchoredVerseIndex = currentVerseIndex;
+            setAnchoredVerseIndex(currentVerseIndex);
             const v = memoryCache[currentVerseIndex];
             speak("Anchored " + v.book_name + " " + v.chapter + " verse " + v.verse);
             playTone(800, 'sine', 0.1, 0.2);
@@ -652,20 +654,20 @@ export function handleInput(event) {
         }
         case '-':
             event.preventDefault();
-            currentFontSize = Math.max(12, currentFontSize - 2);
+            setCurrentFontSize(Math.max(12, currentFontSize - 2));
             document.documentElement.style.setProperty('--base-font-size', currentFontSize + 'px');
             speak("Text size " + currentFontSize);
             break;
         case '=':
         case '+':
             event.preventDefault();
-            currentFontSize = Math.min(72, currentFontSize + 2);
+            setCurrentFontSize(Math.min(72, currentFontSize + 2));
             document.documentElement.style.setProperty('--base-font-size', currentFontSize + 'px');
             speak("Text size " + currentFontSize);
             break;
         case 'T': {
             event.preventDefault();
-            currentThemeIndex = (currentThemeIndex + 1) % THEMES.length;
+            setCurrentThemeIndex((currentThemeIndex + 1) % THEMES.length);
             const newTheme = THEMES[currentThemeIndex];
             if (newTheme === 'default') {
                 document.body.removeAttribute('data-theme');
