@@ -5,6 +5,11 @@
 
 import { DB_NAME, DB_VERSION, TEXT_STORE, NOTES_STORE, BOOKMARKS_STORE, COMMENTARY_STORE, helpMenuData, AUDIO_GAIN_BOOST, THEMES, tutorialChapters, hymnList, volumeStages } from './config.js';
 import { speak, announcer } from './ui.js';
+import {
+    initAudio, playTone, playSequence, playNoteIndicator, playCommentaryCue,
+    playNextTrack, silenceBootAudio, cycleVolume,
+    audioCtx, audioA, audioB, activeAudio, currentVolumeIndex, crossfadeTimer
+} from './audio.js';
 
 // --- Global State ---
 let db;
@@ -39,7 +44,6 @@ let searchInputEl = null;
 let noteEditorEl = null;
 let importFileEl = null;
 let importCommentaryEl = null;
-let audioCtx = null;
 let currentFontSize = 24;
 let currentThemeIndex = 0;
 let isWelcomeMode = false;
@@ -51,74 +55,10 @@ let tutorialTitleEl = null;
 let tutorialAudioEl = null;
 let currentTutorialIndex = 0;
 let muteTutorialPrompt = localStorage.getItem('muteTutorialPrompt') === 'true';
-let grabBag = [];
-let audioA = new Audio();
-let audioB = new Audio();
-let activeAudio = audioA;
-let currentVolumeIndex = 2;
-let crossfadeTimer = null;
 const onTrackEnded = () => playNextTrack();
 
 const splashScreen = document.getElementById('splash-screen');
 const focusTrap = document.getElementById('focus-trap');
-
-function initAudio() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-}
-
-function playTone(freq, type, dur, vol) {
-    if (!audioCtx) return;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    const boostedVol = Math.min(1, vol * AUDIO_GAIN_BOOST);
-    osc.type = type;
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(boostedVol, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + dur);
-}
-
-function playSequence(types, freqs, dur, vol) {
-    if (!Array.isArray(freqs) || freqs.length === 0) return;
-    for (let i = 0; i < freqs.length; i++) {
-        setTimeout(() => {
-            playTone(freqs[i], (types && types[i]) || 'sine', dur, vol);
-        }, i * dur * 1000);
-    }
-}
-
-function playNoteIndicator() {
-    playSequence(['sine', 'sine', 'sine', 'sine'], [1000, 1500, 2000, 2500], 0.05, 0.2);
-}
-
-function playCommentaryCue() {
-    if (!audioCtx) return;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    const delay = audioCtx.createDelay();
-    const feedback = audioCtx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.value = 1800;
-    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.04);
-    delay.delayTime.value = 0.08;
-    feedback.gain.value = 0.4;
-
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    gain.connect(delay);
-    delay.connect(feedback);
-    feedback.connect(delay);
-    delay.connect(audioCtx.destination);
-
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.04);
-}
 
 // --- Data Pipeline ---
 function initDatabase() {
@@ -393,47 +333,6 @@ function clearAllModes() {
     currentMenuIndex = 0;
 }
 
-function getNextHymn() {
-    if (grabBag.length === 0) {
-        grabBag = [...hymnList];
-        for (let i = grabBag.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [grabBag[i], grabBag[j]] = [grabBag[j], grabBag[i]];
-        }
-    }
-    return grabBag.pop();
-}
-
-function formatSongTitle(filename) {
-    let base = filename.replace(/\.mp3$/i, '').replace(/\d+$/, '').replace(/_/g, ' ');
-    return base.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-}
-
-function silenceBootAudio() {
-    [audioA, audioB].forEach(audio => {
-        try {
-            audio.pause();
-            audio.currentTime = 0;
-        } catch (error) {
-            console.warn('Unable to stop ambient audio during boot silence:', error);
-        }
-    });
-
-    if (crossfadeTimer) {
-        clearInterval(crossfadeTimer);
-        crossfadeTimer = null;
-    }
-
-    if (welcomeAudioEl) {
-        try {
-            welcomeAudioEl.pause();
-            welcomeAudioEl.currentTime = 0;
-        } catch (error) {
-            console.warn('Unable to stop welcome audio during boot silence:', error);
-        }
-    }
-}
-
 function updateTutorialChapter(newIndex, autoPlay = true) {
     if (!tutorialAudioEl || !tutorialTitleEl || tutorialChapters.length === 0) return;
 
@@ -493,62 +392,6 @@ function endTutorialSequence() {
 
     playNextTrack(true);
     speak('Exited Audio Codex. Back in study environment.');
-}
-
-function playNextTrack(suppressTTS = false) {
-    const standbyAudio = activeAudio === audioA ? audioB : audioA;
-    const previousAudio = activeAudio;
-    const targetVolume = volumeStages[currentVolumeIndex];
-    const nextTrack = getNextHymn();
-
-    if (crossfadeTimer) {
-        clearInterval(crossfadeTimer);
-        crossfadeTimer = null;
-    }
-
-    previousAudio.removeEventListener('ended', onTrackEnded);
-    standbyAudio.pause();
-    standbyAudio.currentTime = 0;
-    standbyAudio.src = `./audio/hymns/${nextTrack}`;
-    standbyAudio.volume = 0;
-    
-    if (!suppressTTS) {
-        speak("Now playing " + formatSongTitle(nextTrack));
-    }
-
-    const playPromise = standbyAudio.play();
-    if (playPromise && typeof playPromise.catch === 'function') {
-        playPromise.catch((error) => {
-            console.warn('Ambient audio playback blocked or failed:', error);
-        });
-    }
-
-    const durationMs = 2000;
-    const stepMs = 100;
-    const totalSteps = durationMs / stepMs;
-    let step = 0;
-    const startVolume = previousAudio.paused ? 0 : previousAudio.volume;
-
-    crossfadeTimer = setInterval(() => {
-        step += 1;
-        const progress = Math.min(step / totalSteps, 1);
-
-        previousAudio.volume = Math.max(0, startVolume * (1 - progress));
-        standbyAudio.volume = Math.min(targetVolume, targetVolume * progress);
-
-        if (progress >= 1) {
-            clearInterval(crossfadeTimer);
-            crossfadeTimer = null;
-
-            previousAudio.pause();
-            previousAudio.currentTime = 0;
-            previousAudio.volume = targetVolume;
-
-            activeAudio = standbyAudio;
-            activeAudio.removeEventListener('ended', onTrackEnded);
-            activeAudio.addEventListener('ended', onTrackEnded);
-        }
-    }, stepMs);
 }
 
 // --- Coordinate-Based Navigation ---
@@ -861,17 +704,6 @@ function handleInput(event) {
             memoryCache[currentVerseIndex].book_name + " " + memoryCache[currentVerseIndex].chapter + ":" +
             memoryCache[currentVerseIndex].verse + " - " + memoryCache[currentVerseIndex].text
         );
-        return;
-    }
-
-    if (key === 'V' && event.shiftKey) {
-        event.preventDefault();
-        currentVolumeIndex += 1;
-        if (currentVolumeIndex >= volumeStages.length) {
-            currentVolumeIndex = 0;
-        }
-        activeAudio.volume = volumeStages[currentVolumeIndex];
-        speak("Ambient volume " + Math.round(volumeStages[currentVolumeIndex] * 100));
         return;
     }
 
@@ -1202,11 +1034,14 @@ function handleInput(event) {
             break;
         case 'V':
             event.preventDefault();
-            if (event.shiftKey) break;
-            if (!isReady) break;
-            clearAllModes();
-            isVerseMode = true;
-            speak("Verse search. Enter numbers.");
+            if (event.shiftKey) {
+                cycleVolume();
+            } else {
+                if (!isReady) break;
+                clearAllModes();
+                isVerseMode = true;
+                speak("Verse search. Enter numbers.");
+            }
             break;
         case 'S': {
             event.preventDefault();
