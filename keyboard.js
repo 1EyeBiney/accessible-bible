@@ -8,7 +8,7 @@ import {
     currentTutorialIndex, setCurrentTutorialIndex,
     readCurrentVerse, jumpTo, openNoteEditorForCurrentVerse,
     startWelcomeSequence, endWelcomeSequence, startTutorialSequence, endTutorialSequence,
-    updateTutorialChapter, getKeyboardExplorerDescription, navigateBookmarks,
+    updateTutorialChapter, playTutorialChapter, getKeyboardExplorerDescription, navigateBookmarks,
     toggleCurrentBookmark, parseLinkTarget, isWelcomeMode, isTutorialMode, setWelcomeMode, setTutorialMode
 } from './app.js';
 import { 
@@ -46,6 +46,8 @@ export function setSearchMode(value) { isSearchMode = value; }
 export function setNoteMode(value) { isNoteMode = value; }
 export function getSearchMode() { return isSearchMode; }
 export function getNoteMode() { return isNoteMode; }
+export function setSearchResults(val) { searchResults = val; }
+export function setCurrentSearchResultIndex(val) { currentSearchResultIndex = val; }
 
 export function handleInput(event) {
     if (!isInitialized) {

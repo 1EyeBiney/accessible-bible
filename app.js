@@ -11,15 +11,13 @@ import {
     audioCtx, audioA, audioB, activeAudio, currentVolumeIndex, crossfadeTimer
 } from './audio.js';
 import { db, memoryCache, bookmarksCache, initDatabase, loadBookmarks, loadToMemory, setMemoryCache } from './db.js';
-import { handleInput, clearAllModes, setSearchMode, setNoteMode, getSearchMode, getNoteMode } from './keyboard.js';
+import { handleInput, clearAllModes, setSearchMode, setNoteMode, getSearchMode, getNoteMode, setSearchResults, setCurrentSearchResultIndex } from './keyboard.js';
 
 // --- Global State ---
 export let currentVerseIndex = 0; 
 export let currentBookName = '';
 let lastSearchLetter = '';
 let inputBuffer = '';
-let searchResults = [];
-let currentSearchResultIndex = -1;
 let currentBookmarkIndex = -1;
 export let anchoredVerseIndex = -1;
 export let navigationHistory = [];
@@ -250,7 +248,7 @@ export function updateTutorialChapter(newIndex, autoPlay = true) {
     speak(chapter.title + '.');
 }
 
-function playTutorialChapter(index) {
+export function playTutorialChapter(index) {
     updateTutorialChapter(index, true);
 }
 
@@ -461,22 +459,22 @@ window.addEventListener('DOMContentLoaded', () => {
             const query = searchInput.value.trim().toLowerCase();
             if (!query) return;
 
-            searchResults = memoryCache.filter(v => v.text.toLowerCase().includes(query));
+            const results = memoryCache.filter(v => v.text.toLowerCase().includes(query)); setSearchResults(results);
 
-            if (searchResults.length === 0) {
+            if (results.length === 0) {
                 speak("No matches found for " + query);
                 return;
             }
 
-            currentSearchResultIndex = 0;
+            setCurrentSearchResultIndex(0);
             setSearchMode(false);
             focusTrap.focus();
 
-            currentVerseIndex = memoryCache.findIndex(v => v === searchResults[0]);
+            updateVerseIndex(memoryCache.findIndex(v => v === results[0]));
             speak(
-                "Found " + searchResults.length + " matches. Match 1: " +
-                searchResults[0].book_name + " chapter " + searchResults[0].chapter + ", verse " +
-                searchResults[0].verse + ": " + searchResults[0].text
+                "Found " + results.length + " matches. Match 1: " +
+                results[0].book_name + " chapter " + results[0].chapter + ", verse " +
+                results[0].verse + ": " + results[0].text
             );
         }
     });
