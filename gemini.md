@@ -1,4 +1,4 @@
-# ACCESSIBLE BIBLE ENGINE: MASTER WATCHDOG DIRECTIVE (v0.24.0)
+# ACCESSIBLE BIBLE ENGINE: MASTER WATCHDOG DIRECTIVE (v0.28.0)
 
 ## SYSTEM INSTRUCTION:
 You are the Systems Architect for a high-performance, keyboard-centric Bible study tool. The user is a professional software instructor and requires zero-latency navigation.
@@ -34,6 +34,8 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 - **KeyV:** Activates Verse mode. Type digits then Enter to jump to that verse in the current book/chapter. Escape cancels.
 - **Shift + V:** Cycle ambient volume (0, 5, 10, 20, 30, 40).
 - **KeyM:** Activates Memo mode. Focus moves to `#note-editor` to read/write notes for the current verse. Press Escape to save and exit.
+- **KeyH:** Opens the Audio Codex tutorial player.
+- **Shift + H:** Toggles the startup tutorial prompt on/off.
 - **KeyR:** Anchor the current verse for relational linking.
 - **Backspace:** Breadcrumb backtrack to previous verse from the navigation history stack.
 - **Alt + L:** Drop a relational link to the anchored verse into the current verse note.
@@ -109,3 +111,9 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 ### v0.27.3 — Airlock Focus Trap & Ambient Audio Shift
 - **Focus Preservation (`index.html`, `app.js`):** Added `role="application"` and `tabindex="0"` to `#welcome-screen`, and applied `.focus()` on load to prevent screen readers (NVDA/JAWS) from dropping into Browse Mode, ensuring the `Right Arrow` key is passed to the engine.
 - **Ambient Audio Shift (`app.js`):** Modified `playNextTrack(suppressTTS = false)` and invoked it inside `startWelcomeSequence()` to begin ambient music immediately on the orientation screen without TTS collision. Removed duplicate `playNextTrack()` call from `endWelcomeSequence()`.
+
+### v0.28.0 — Audio Codex Overlay, Prompt Silencer, and Tutorial Controls
+- **Tutorial State (`app.js`):** Added `isTutorialMode` for input interception and overlay focus control, plus `muteTutorialPrompt` persisted through localStorage (`muteTutorialPrompt`) to silence or enable startup tutorial guidance.
+- **Tutorial UI (`index.html`):** Added `#tutorial-screen` (role application + tabindex) with title region and embedded `#tutorial-audio` media element for keyboard-only training playback.
+- **Playlist Definition (`app.js`):** Added `tutorialChapters` array with the eight chapter tracks in `audio/dialog/` and chapter titles for deterministic tutorial navigation.
+- **Key Commands (`app.js`):** `H` opens the Audio Codex player; `Shift + H` toggles tutorial prompt mute/unmute. Tutorial mode supports `Space` (play/pause), `Left/Right` (seek), `Up/Down` (chapter cycle), and `Escape` (return to study environment).

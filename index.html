@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Accessible Bible (v0.27.3)</title>
+    <title>Accessible Bible (v0.29.0)</title>
     <style>
         /* A utility class to visually hide text while keeping it accessible to screen readers */
         .sr-only {
@@ -79,7 +79,7 @@
             </div>
 
         <div id="visual-hud" aria-hidden="true" style="position: fixed; bottom: 0; width: 100%; padding: 10px; background: var(--bg-color); border-top: 2px solid var(--accent-color); font-family: monospace; font-size: 1.2rem;">
-            [Arrows] Navigate | [M] Note | [O] Options | [-/+] Text Size | [T] Theme
+            [Arrows] Navigate | [M] Note | [H] Audio Codex | [O] Options | [-/+] Text Size | [T] Theme
         </div>
         <div id="visual-alerts" aria-hidden="true" style="position: fixed; top: 20px; right: 20px; display: flex; gap: 10px;">
             <span id="alert-note" style="display: none; padding: 10px 20px; background: var(--text-color); color: var(--bg-color); font-weight: bold; font-family: monospace;">NOTE [Up]</span>
@@ -108,6 +108,19 @@
             </div>
         </div>
         <audio id="welcome-audio" src="./audio/dialog/welcome.mp3"></audio>
+    </div>
+
+    <div id="tutorial-screen" role="application" tabindex="0" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 100; background: var(--bg-color); color: var(--text-color); user-select: none; padding: 5%; box-sizing: border-box; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+        <h1 style="font-size: calc(var(--base-font-size) * 2); color: var(--accent-color); margin-bottom: 10px;">Audio Codex Active</h1>
+        <h2 id="tutorial-title" style="font-size: calc(var(--base-font-size) * 1.5); margin-bottom: 40px;">Chapter 0: Tutorial Controls</h2>
+
+        <div style="font-size: calc(var(--base-font-size) * 1.2); line-height: 2; border: 2px dashed var(--text-color); padding: 30px; border-radius: 12px; display: inline-block; text-align: left;">
+            <div><strong>Spacebar:</strong> Play / Pause</div>
+            <div><strong>Left / Right:</strong> Rewind / Fast Forward 10s</div>
+            <div><strong>Up / Down:</strong> Previous / Next Chapter</div>
+            <div style="margin-top: 20px; color: var(--accent-color);"><strong>Escape:</strong> Exit to Study Environment</div>
+        </div>
+        <audio id="tutorial-audio"></audio>
     </div>
 
     <script src="app.js"></script>

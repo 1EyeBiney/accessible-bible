@@ -1,6 +1,6 @@
 /**
- * Accessible Study Bible - v0.27.3
- * Airlock Path & ARIA Patch
+ * Accessible Study Bible - v0.29.0
+ * Audio Codex overlay, boot silencer, and media player logic
  */
 
 // --- Global State ---
@@ -46,6 +46,7 @@ const helpMenuData = [
     "Relational Links: Press R to anchor a verse. Press Alt plus L to drop a link to it.",
     "Relational Links: Press Alt plus J to jump to links in your current note. Press Backspace to return.",
     "Audio: Press N to skip ambient tracks. Press Shift plus V to cycle volume.",
+    "Audio Codex: Press H to open the tutorial player. Use Space, arrows, and Escape inside the overlay.",
     "Utilities: Press Tab for current location. Press S for chapter stats. Press F12 for Keyboard Explorer."
 ];
 let isReady = false;
@@ -64,6 +65,22 @@ let currentThemeIndex = 0;
 let isWelcomeMode = false;
 let skipWelcome = localStorage.getItem('skipWelcome') === 'true';
 let welcomeAudioEl = null;
+let isTutorialMode = false;
+let tutorialScreenEl = null;
+let tutorialTitleEl = null;
+let tutorialAudioEl = null;
+let currentTutorialIndex = 0;
+let muteTutorialPrompt = localStorage.getItem('muteTutorialPrompt') === 'true';
+const tutorialChapters = [
+    { file: '00_tutorial_and_help.mp3', title: 'Chapter 0: Tutorial Controls' },
+    { file: '01_navigation.mp3', title: 'Chapter 1: Basic Navigation' },
+    { file: '02_targeted_movement.mp3', title: 'Chapter 2: Targeted Movement' },
+    { file: '03_search_and_status.mp3', title: 'Chapter 3: Search and Status' },
+    { file: '04_notes.mp3', title: 'Chapter 4: Notes' },
+    { file: '05_relational_linking.mp3', title: 'Chapter 5: Relational Linking' },
+    { file: '06_commentary_and_options.mp3', title: 'Chapter 6: Commentary and Options' },
+    { file: '07_audio_and_visuals.mp3', title: 'Chapter 7: Audio and Visuals' }
+];
 
 const hymnList = [
     'a_mighty_fortress_is_our_god1.mp3', 'a_mighty_fortress_is_our_god2.mp3',
@@ -235,7 +252,8 @@ function loadToMemory() {
         loadBookmarks();
         currentBookName = memoryCache[0].book_name;
         isReady = true;
-        speak("Library ready. Use left and right arrows to read. Press M to edit note.");
+        const helperText = muteTutorialPrompt ? "" : " Press H for audio tutorial, or Shift plus H to mute this prompt.";
+        speak("Library ready. Use left and right arrows to read. Press M to edit note." + helperText);
     };
 }
 
@@ -445,6 +463,92 @@ function formatSongTitle(filename) {
     return base.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
 
+function silenceBootAudio() {
+    [audioA, audioB].forEach(audio => {
+        try {
+            audio.pause();
+            audio.currentTime = 0;
+        } catch (error) {
+            console.warn('Unable to stop ambient audio during boot silence:', error);
+        }
+    });
+
+    if (crossfadeTimer) {
+        clearInterval(crossfadeTimer);
+        crossfadeTimer = null;
+    }
+
+    if (welcomeAudioEl) {
+        try {
+            welcomeAudioEl.pause();
+            welcomeAudioEl.currentTime = 0;
+        } catch (error) {
+            console.warn('Unable to stop welcome audio during boot silence:', error);
+        }
+    }
+}
+
+function updateTutorialChapter(newIndex, autoPlay = true) {
+    if (!tutorialAudioEl || !tutorialTitleEl || tutorialChapters.length === 0) return;
+
+    currentTutorialIndex = (newIndex + tutorialChapters.length) % tutorialChapters.length;
+    const chapter = tutorialChapters[currentTutorialIndex];
+    tutorialTitleEl.textContent = chapter.title;
+    const chapterSrc = `./audio/dialog/${chapter.file}`;
+
+    const sourceChanged = tutorialAudioEl.getAttribute('src') !== chapterSrc;
+    if (sourceChanged) {
+        tutorialAudioEl.src = chapterSrc;
+        tutorialAudioEl.load();
+    }
+
+    if (autoPlay) {
+        const playPromise = tutorialAudioEl.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch((error) => {
+                console.warn('Tutorial chapter playback blocked or failed:', error);
+                speak('Chapter loaded. Press Space to play.');
+            });
+        }
+    }
+
+    speak(chapter.title + '.');
+}
+
+function playTutorialChapter(index) {
+    updateTutorialChapter(index, true);
+}
+
+function startTutorialSequence() {
+    isTutorialMode = true;
+    silenceBootAudio();
+
+    if (tutorialScreenEl) {
+        tutorialScreenEl.style.display = 'flex';
+        tutorialScreenEl.focus();
+    }
+
+    speak('Audio Codex active. Space to play or pause. Left and right to seek. Up and down to change chapter. Escape to enter study environment.');
+    updateTutorialChapter(currentTutorialIndex, true);
+}
+
+function endTutorialSequence() {
+    isTutorialMode = false;
+    if (tutorialAudioEl) {
+        tutorialAudioEl.pause();
+        tutorialAudioEl.currentTime = 0;
+    }
+    if (tutorialScreenEl) {
+        tutorialScreenEl.style.display = 'none';
+    }
+
+    document.getElementById('app-container').style.display = 'block';
+    document.getElementById('focus-trap').focus();
+
+    playNextTrack(true);
+    speak('Exited Audio Codex. Back in study environment.');
+}
+
 function playNextTrack(suppressTTS = false) {
     const standbyAudio = activeAudio === audioA ? audioB : audioA;
     const previousAudio = activeAudio;
@@ -542,6 +646,7 @@ function getKeyboardExplorerDescription(event) {
     if (keyUpper === 'C') return 'C: Start Chapter jump mode.';
     if (keyUpper === 'V') return event.shiftKey ? 'Shift plus V: Cycle ambient volume.' : 'V: Start Verse jump mode.';
     if (keyUpper === 'M') return 'M: Open note editor for this verse.';
+    if (keyUpper === 'H') return 'H: Open Audio Codex tutorial overlay.';
     if (keyUpper === 'R') return 'R: Anchor this verse for relational linking.';
     if (keyUpper === 'N') return 'N: Skip to next ambient track.';
     if (keyUpper === 'S') return 'S: Speak chapter status report.';
@@ -565,9 +670,10 @@ function handleInput(event) {
     }
     if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return;
 
+    const key = event.key;
+
     if (isWelcomeMode) {
         event.preventDefault(); // Kill all default browser actions
-        const key = event.key;
 
         if (key === 'Escape' || key === 'ArrowRight') {
             endWelcomeSequence();
@@ -584,7 +690,60 @@ function handleInput(event) {
         return; // Swallow all other keys completely
     }
 
-    const key = event.key;
+    if (isTutorialMode) {
+        event.preventDefault();
+
+        if (key === 'Escape') {
+            endTutorialSequence();
+            return;
+        }
+
+        if (!tutorialAudioEl) {
+            speak('Tutorial player unavailable. Press Escape to continue.');
+            return;
+        }
+
+        if (key === ' ') {
+            if (tutorialAudioEl.paused) {
+                tutorialAudioEl.play().catch((error) => {
+                    console.warn('Tutorial audio play failed:', error);
+                    speak('Playback unavailable.');
+                });
+                speak('Play.');
+            } else {
+                tutorialAudioEl.pause();
+                speak('Pause.');
+            }
+            return;
+        }
+
+        if (key === 'ArrowLeft') {
+            tutorialAudioEl.currentTime = Math.max(0, tutorialAudioEl.currentTime - 10);
+            speak('Rewind 10 seconds.');
+            return;
+        }
+
+        if (key === 'ArrowRight') {
+            const duration = Number.isFinite(tutorialAudioEl.duration) ? tutorialAudioEl.duration : 0;
+            const maxTime = duration > 0 ? duration : tutorialAudioEl.currentTime + 10;
+            tutorialAudioEl.currentTime = Math.min(maxTime, tutorialAudioEl.currentTime + 10);
+            speak('Fast forward 10 seconds.');
+            return;
+        }
+
+        if (key === 'ArrowUp') {
+            updateTutorialChapter(currentTutorialIndex - 1, true);
+            return;
+        }
+
+        if (key === 'ArrowDown') {
+            updateTutorialChapter(currentTutorialIndex + 1, true);
+            return;
+        }
+
+        return;
+    }
+
     const keyUpper = key.toUpperCase();
 
     if (isKeyboardExplorer) {
@@ -966,6 +1125,23 @@ function handleInput(event) {
             event.preventDefault();
             openNoteEditorForCurrentVerse();
             break;
+        case 'H':
+            event.preventDefault();
+            if (event.shiftKey) {
+                muteTutorialPrompt = !muteTutorialPrompt;
+                localStorage.setItem('muteTutorialPrompt', muteTutorialPrompt.toString());
+                speak(muteTutorialPrompt ? "Tutorial prompt muted." : "Tutorial prompt enabled.");
+            } else {
+                if (!isReady) break;
+                clearAllModes();
+                isTutorialMode = true;
+                document.getElementById('app-container').style.display = 'none';
+                const tutScreen = document.getElementById('tutorial-screen');
+                tutScreen.style.display = 'flex';
+                tutScreen.focus();
+                playTutorialChapter(0);
+            }
+            break;
         case 'E':
             const testament = isReady ? memoryCache[currentVerseIndex].testament : 'unknown';
             speak(`Echo Chamber active. Index ${currentVerseIndex}. Testament: ${testament}. Ready state: ${isReady}`);
@@ -988,6 +1164,11 @@ function handleInput(event) {
             break;
         case 'R': {
             event.preventDefault();
+            if (event.shiftKey) {
+                localStorage.clear();
+                location.reload();
+                return;
+            }
             if (!isReady) break;
             anchoredVerseIndex = currentVerseIndex;
             const v = memoryCache[currentVerseIndex];
@@ -1131,8 +1312,8 @@ function startWelcomeSequence() {
     welcomeEl.style.display = 'block';
     welcomeEl.focus(); // Pass the baton to keep NVDA in Focus Mode
     
-    // Start ambient music silently (no TTS interruption)
-    playNextTrack(true);
+    // Boot silencer: keep media muted while orientation is active.
+    silenceBootAudio();
     
     // Stealth TTS Bypass for Screen Readers
     speak("Orientation active. Press Escape to skip to the study environment.");
@@ -1153,10 +1334,11 @@ function endWelcomeSequence() {
     }
     document.getElementById('welcome-screen').style.display = 'none';
 
-    // Proceed to standard boot
     document.getElementById('app-container').style.display = 'block';
     document.getElementById('focus-trap').focus();
-    speak("Study environment initialized. Use arrows to navigate. Press M to edit note.");
+    playNextTrack(true);
+    const helperText = muteTutorialPrompt ? "" : " Press H for audio tutorial, or Shift plus H to mute this prompt.";
+    speak("Study environment initialized. Use arrows to navigate. Press M to edit note." + helperText);
     setTimeout(() => initDatabase(), 100);
 }
 
@@ -1166,9 +1348,18 @@ window.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('search-input');
     const noteEditor = document.getElementById('note-editor');
     const importFile = document.getElementById('import-file');
+    tutorialScreenEl = document.getElementById('tutorial-screen');
+    tutorialTitleEl = document.getElementById('tutorial-title');
+    tutorialAudioEl = document.getElementById('tutorial-audio');
     searchInputEl = searchInput;
     noteEditorEl = noteEditor;
     importFileEl = importFile;
+
+    if (tutorialAudioEl) {
+        tutorialAudioEl.addEventListener('ended', () => {
+            updateTutorialChapter(currentTutorialIndex + 1, true);
+        });
+    }
 
     function activateEngine() {
         isInitialized = true;
@@ -1179,8 +1370,9 @@ window.addEventListener('DOMContentLoaded', () => {
             document.getElementById('splash-screen').style.display = 'none';
             document.getElementById('app-container').style.display = 'block';
             focusTrap.focus();
-            playNextTrack();
-            speak("Study environment initialized. Use arrows to navigate. Press M to edit note.");
+            playNextTrack(true);
+            const helperText = muteTutorialPrompt ? "" : " Press H for audio tutorial, or Shift plus H to mute this prompt.";
+            speak("Study environment initialized. Use arrows to navigate. Press M to edit note." + helperText);
             setTimeout(() => initDatabase(), 100);
         } else {
             startWelcomeSequence();
@@ -1204,10 +1396,18 @@ window.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => speak("Press Enter to begin."), 1000);
 
     focusTrap.addEventListener('blur', () => {
-        if (isInitialized && !isSearchMode && !isNoteMode) {
+        if (isInitialized && !isSearchMode && !isNoteMode && !isWelcomeMode && !isTutorialMode) {
             requestAnimationFrame(() => focusTrap.focus());
         }
     });
+
+    if (tutorialScreenEl) {
+        tutorialScreenEl.addEventListener('blur', () => {
+            if (isTutorialMode) {
+                requestAnimationFrame(() => tutorialScreenEl.focus());
+            }
+        });
+    }
 
     searchInput.addEventListener('keydown', (event) => {
         event.stopPropagation();
