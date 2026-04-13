@@ -179,13 +179,21 @@ export function handleInput(event) {
 
         if (key === 'ArrowDown') {
             currentMenuIndex = (currentMenuIndex + 1) % menuOptions.length;
-            speak((currentMenuIndex + 1) + " of " + menuOptions.length + ": " + menuOptions[currentMenuIndex]);
+            let announcement = (currentMenuIndex + 1) + " of " + menuOptions.length + ": " + menuOptions[currentMenuIndex];
+            if (menuOptions[currentMenuIndex].startsWith("Boot Location")) {
+                announcement += ", use spacebar to change";
+            }
+            speak(announcement);
             return;
         }
 
         if (key === 'ArrowUp') {
             currentMenuIndex = (currentMenuIndex - 1 + menuOptions.length) % menuOptions.length;
-            speak((currentMenuIndex + 1) + " of " + menuOptions.length + ": " + menuOptions[currentMenuIndex]);
+            let announcement = (currentMenuIndex + 1) + " of " + menuOptions.length + ": " + menuOptions[currentMenuIndex];
+            if (menuOptions[currentMenuIndex].startsWith("Boot Location")) {
+                announcement += ", use spacebar to change";
+            }
+            speak(announcement);
             return;
         }
 
