@@ -13,6 +13,8 @@ import {
 import { db, memoryCache, bookmarksCache, initDatabase, loadBookmarks, loadToMemory, setMemoryCache } from './db.js';
 import { handleInput, clearAllModes, setSearchMode, setNoteMode, getSearchMode, getNoteMode, setSearchResults, setCurrentSearchResultIndex, updateSearchVisualBuffer, clearVisualBuffer } from './keyboard.js';
 
+export { memoryCache };
+
 // --- Global State ---
 export let currentVerseIndex = 0; 
 export let currentBookName = '';
@@ -187,6 +189,57 @@ export function navigateBookmarks(direction) {
     consecutiveBookmarkJumps++;
 
     readCurrentVerse(false, customPrefix);
+}
+
+export function silentVisualUpdate(newIndex) {
+    if (!isReady || memoryCache.length === 0) return;
+    if (!Number.isInteger(newIndex) || newIndex < 0 || newIndex >= memoryCache.length) return;
+
+    currentVerseIndex = newIndex;
+    const verseObj = memoryCache[currentVerseIndex];
+    currentBookName = verseObj.book_name;
+
+    const noteBadge = document.getElementById('alert-note');
+    const commBadge = document.getElementById('alert-comm');
+    if (noteBadge) noteBadge.style.display = 'none';
+    if (commBadge) commBadge.style.display = 'none';
+
+    const renderVisualVerse = (hasLinkFlag = false) => {
+        let flagString = '';
+        if (bookmarksCache.includes(verseObj.id)) flagString += '[B] ';
+        if (anchoredVerseIndex >= 0 && anchoredVerseIndex === currentVerseIndex) flagString += '[R] ';
+        if (hasLinkFlag) flagString += '[J] ';
+        const visualReference = `${verseObj.book_name} ${verseObj.chapter}:${verseObj.verse}`;
+        const contentDisplay = document.getElementById('content-display');
+        if (contentDisplay) {
+            contentDisplay.innerHTML = `<strong>${visualReference}</strong><br><br>${flagString}${verseObj.text}`;
+            contentDisplay.scrollIntoView({ block: 'center', behavior: 'auto' });
+        }
+    };
+
+    // Render immediately, then refine with async link detection from note payload.
+    renderVisualVerse(false);
+
+    if (!db) return;
+    const curriculumId = (verseObj.book_number * 1000000) + (verseObj.chapter * 1000) + verseObj.verse;
+    const tx = db.transaction([NOTES_STORE, COMMENTARY_STORE], 'readonly');
+
+    const noteRequest = tx.objectStore(NOTES_STORE).get(verseObj.id);
+    noteRequest.onsuccess = () => {
+        const noteContent = noteRequest.result?.content || '';
+        const hasLinkFlag = /\[\[(.*?)\]\]/.test(noteContent);
+        renderVisualVerse(hasLinkFlag);
+        if (noteBadge && noteContent.trim() !== '') {
+            noteBadge.style.display = 'block';
+        }
+    };
+
+    const commRequest = tx.objectStore(COMMENTARY_STORE).get(curriculumId);
+    commRequest.onsuccess = () => {
+        if (commBadge && commRequest.result) {
+            commBadge.style.display = 'block';
+        }
+    };
 }
 
 // --- Core Navigation Logic ---
@@ -416,7 +469,9 @@ export function getKeyboardExplorerDescription(event) {
     if (keyUpper === 'H') return 'H: Open Audio Codex tutorial overlay.';
     if (keyUpper === 'R') return 'R: Anchor this verse for relational linking.';
     if (keyUpper === 'N') return 'N: Skip to next ambient track.';
-    if (keyUpper === 'S') return 'S: Speak chapter status report.';
+    if (keyUpper === 'A') return 'A: Open Auto Play Menu.';
+    if (keyUpper === 'P') return 'P: Play or Pause Auto Play continuous reading.';
+    if (keyUpper === 'S') return 'S: Stop Auto Play continuous reading.';
     if (keyUpper === 'K') return 'K: Toggle bookmark for current verse.';
     if (keyUpper === 'E') return 'E: Speak diagnostic engine state.';
     if (keyUpper === 'O') return 'O: Open Options menu to import/export data.';

@@ -20,7 +20,10 @@ export const helpMenuData = [
     "Relational Links: Press Alt plus J to jump to links in your current note. Press Backspace to return.",
     "Audio: Press N to skip ambient tracks. Press Shift plus V to cycle volume.",
     "Audio Codex: Press H to open the tutorial player. Use Space, arrows, and Escape inside the overlay.",
-    "Utilities: Press Tab for current location. Press S for chapter stats. Press F12 for Keyboard Explorer."
+    "Utilities: Press Tab for current location. Press S for chapter stats. Press F12 for Keyboard Explorer.",
+    "A: Open Auto Play Menu",
+    "P: Play or Pause Auto Play continuous reading",
+    "S: Stop Auto Play continuous reading"
 ];
 
 export const AUDIO_GAIN_BOOST = 1.45;

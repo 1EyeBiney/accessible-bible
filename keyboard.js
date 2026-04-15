@@ -18,6 +18,7 @@ import {
 import { 
     playNextTrack, cycleVolume, playTone, silenceBootAudio 
 } from './audio.js';
+import { startAutoPlay, pauseAutoPlay, stopAutoPlay, isAutoPlaying, autoPlaySettings, curatedVoices } from './autoplay.js';
 import { helpMenuData, NOTES_STORE, COMMENTARY_STORE, THEMES, muteTutorialPrompt, setMuteTutorialPrompt } from './config.js';
 
 const visualBuffer = document.getElementById('visual-buffer');
@@ -55,6 +56,7 @@ export let isVerseMode = false;
 export let isSearchMode = false;
 export let isNoteMode = false;
 export let isMenuMode = false;
+export let isAutoPlayMenuMode = false;
 export let currentMenuTitle = "";
 export let isKeyboardExplorer = false;
 export let isHelpMode = false;
@@ -66,7 +68,7 @@ export let currentMenuIndex = 0;
 
 export function clearAllModes() {
     isBookSearchMode = false; isChapterMode = false; isVerseMode = false;
-    isSearchMode = false; isNoteMode = false; isMenuMode = false;
+    isSearchMode = false; isNoteMode = false; isMenuMode = false; isAutoPlayMenuMode = false;
     isHelpMode = false; isKeyboardExplorer = false;
     currentMenuTitle = "";
     inputBuffer = ''; lastSearchLetter = '';
@@ -85,6 +87,21 @@ export function getSearchMode() { return isSearchMode; }
 export function getNoteMode() { return isNoteMode; }
 export function setSearchResults(val) { searchResults = val; }
 export function setCurrentSearchResultIndex(val) { currentSearchResultIndex = val; }
+
+function getAutoPlayMenuDisplayString() {
+    if (currentMenuIndex === 0) {
+        return "Voice: " + (curatedVoices[autoPlaySettings.voiceIndex]?.display || "Loading...");
+    }
+    if (currentMenuIndex === 1) {
+        return `Rate: ${autoPlaySettings.rate.toFixed(1)}`;
+    }
+    if (currentMenuIndex === 2) {
+        const transitionLabels = ['Chime', 'Numbers', 'Seamless'];
+        return `Transition: ${transitionLabels[autoPlaySettings.transition] || 'Unknown'}`;
+    }
+    const postFocusLabels = ['Stay at stopped verse', 'Return to start'];
+    return `Post-Focus: ${postFocusLabels[autoPlaySettings.postFocus] || 'Unknown'}`;
+}
 
 export function handleInput(event) {
     if (!isInitialized) {
@@ -178,6 +195,10 @@ export function handleInput(event) {
 
     const keyUpper = key.toUpperCase();
 
+    if (isAutoPlaying && !['A', 'P', 'S', 'SHIFT', 'CONTROL', 'ALT'].includes(keyUpper) && !isAutoPlayMenuMode) {
+        stopAutoPlay();
+    }
+
     if (isKeyboardExplorer) {
         event.preventDefault();
         if (event.key === 'Escape' || event.key === 'F12') {
@@ -210,6 +231,56 @@ export function handleInput(event) {
             return;
         }
         speak("Help menu active. Use up and down arrows to navigate. Escape closes help.");
+        return;
+    }
+
+    if (isAutoPlayMenuMode) {
+        event.preventDefault();
+
+        if (key === 'Escape') {
+            clearAllModes();
+            speak('Auto Play menu closed');
+            return;
+        }
+
+        if (key === 'ArrowDown') {
+            currentMenuIndex = (currentMenuIndex + 1) % 4;
+            const displayString = getAutoPlayMenuDisplayString();
+            updateVisualBuffer('AUTO PLAY MENU', displayString);
+            speak(displayString);
+            return;
+        }
+
+        if (key === 'ArrowUp') {
+            currentMenuIndex = (currentMenuIndex - 1 + 4) % 4;
+            const displayString = getAutoPlayMenuDisplayString();
+            updateVisualBuffer('AUTO PLAY MENU', displayString);
+            speak(displayString);
+            return;
+        }
+
+        if (key === 'ArrowLeft' || key === 'ArrowRight') {
+            const delta = key === 'ArrowRight' ? 1 : -1;
+
+            if (currentMenuIndex === 0) {
+                if (curatedVoices.length > 0) {
+                    autoPlaySettings.voiceIndex = (autoPlaySettings.voiceIndex + delta + curatedVoices.length) % curatedVoices.length;
+                }
+            } else if (currentMenuIndex === 1) {
+                const nextRate = autoPlaySettings.rate + (delta * 0.1);
+                autoPlaySettings.rate = Math.max(0.5, Math.min(2.5, Number(nextRate.toFixed(1))));
+            } else if (currentMenuIndex === 2) {
+                autoPlaySettings.transition = (autoPlaySettings.transition + delta + 3) % 3;
+            } else if (currentMenuIndex === 3) {
+                autoPlaySettings.postFocus = (autoPlaySettings.postFocus + delta + 2) % 2;
+            }
+
+            const displayString = getAutoPlayMenuDisplayString();
+            updateVisualBuffer('AUTO PLAY MENU', displayString);
+            speak(displayString);
+            return;
+        }
+
         return;
     }
 
@@ -608,6 +679,19 @@ export function handleInput(event) {
             updateVisualBuffer(currentMenuTitle, menuOptions[0]);
             speak("Options Menu. 1 of 5: Export Personal Notes. Up and down arrows to navigate, Enter to select, Escape to close.");
             break;
+        case 'A':
+            event.preventDefault();
+            clearAllModes();
+            isAutoPlayMenuMode = true;
+            currentMenuTitle = 'AUTO PLAY MENU';
+            currentMenuIndex = 0;
+            updateVisualBuffer(currentMenuTitle, "Voice: " + (curatedVoices[autoPlaySettings.voiceIndex]?.display || "Loading..."));
+            break;
+        case 'P':
+            event.preventDefault();
+            if (isAutoPlaying) pauseAutoPlay();
+            else startAutoPlay();
+            break;
         case 'B':
             event.preventDefault();
             if (!isReady) break;
@@ -726,6 +810,10 @@ export function handleInput(event) {
             break;
         case 'S': {
             event.preventDefault();
+            if (isAutoPlaying) {
+                stopAutoPlay();
+                break;
+            }
             if (!isReady) break;
             const cur = memoryCache[currentVerseIndex];
             const chapterVerses = memoryCache.filter(v => v.book_name === cur.book_name && v.chapter === cur.chapter);
