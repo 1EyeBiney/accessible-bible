@@ -7,12 +7,15 @@ let audioCtx = null;
 // Settings State
 const savedSettings = JSON.parse(localStorage.getItem('autoPlaySettings'));
 export const autoPlaySettings = savedSettings || {
-    transition: 0, // 0: Chime, 1: Numbers, 2: Seamless
+    transition: 0,
     voiceIndex: 0,
     rate: 1.0,
-    postFocus: 0, // 0: Stay at stopped verse, 1: Return to start
-    range: 0 // 0: End of Chapter, 1: End of Book, 2: 5 Verses, 3: 10 Verses
+    postFocus: 0,
+    unit: 0, // 0: Verses, 1: Chapters, 2: Books
+    amount: 0 // Index for [End of Current, 1, 2, 3, 4, 5, 10, 15, 25, 50]
 };
+// Ensure fallback if old localStorage doesn't have unit/amount
+if (autoPlaySettings.unit === undefined) { autoPlaySettings.unit = 0; autoPlaySettings.amount = 0; }
 
 export function saveAutoPlaySettings() {
     localStorage.setItem('autoPlaySettings', JSON.stringify(autoPlaySettings));
@@ -153,19 +156,34 @@ function queueRemainingVerses(startIndex) {
 
     const startVerse = memoryCache[startIndex];
     let endIndex = memoryCache.length;
+    const amountVals = [0, 1, 2, 3, 4, 5, 10, 15, 25, 50];
+    const N = amountVals[autoPlaySettings.amount];
 
-    if (autoPlaySettings.range === 0) {
+    if (autoPlaySettings.unit === 0) { // Verses
+        const count = N === 0 ? 1 : N; // "End of current" verse equals 1 verse
+        endIndex = Math.min(startIndex + count, memoryCache.length);
+    } else if (autoPlaySettings.unit === 1) { // Chapters
+        let boundaryCount = 0;
+        let currentChap = startVerse.chapter;
         for (let i = startIndex; i < memoryCache.length; i++) {
-            if (memoryCache[i].book_name !== startVerse.book_name || memoryCache[i].chapter !== startVerse.chapter) { endIndex = i; break; }
+            if (memoryCache[i].book_name !== startVerse.book_name || memoryCache[i].chapter !== currentChap) {
+                if (N === 0) { endIndex = i; break; }
+                boundaryCount++;
+                currentChap = memoryCache[i].chapter;
+                if (boundaryCount >= N) { endIndex = i; break; }
+            }
         }
-    } else if (autoPlaySettings.range === 1) {
+    } else if (autoPlaySettings.unit === 2) { // Books
+        let boundaryCount = 0;
+        let currentBook = startVerse.book_name;
         for (let i = startIndex; i < memoryCache.length; i++) {
-            if (memoryCache[i].book_name !== startVerse.book_name) { endIndex = i; break; }
+            if (memoryCache[i].book_name !== currentBook) {
+                if (N === 0) { endIndex = i; break; }
+                boundaryCount++;
+                currentBook = memoryCache[i].book_name;
+                if (boundaryCount >= N) { endIndex = i; break; }
+            }
         }
-    } else if (autoPlaySettings.range === 2) {
-        endIndex = Math.min(startIndex + 5, memoryCache.length);
-    } else if (autoPlaySettings.range === 3) {
-        endIndex = Math.min(startIndex + 10, memoryCache.length);
     }
 
     for (let i = startIndex; i < endIndex; i++) {
@@ -226,10 +244,30 @@ export function stopAutoPlay(autoEnd = false) {
     window.speechSynthesis.cancel();
     activeUtterances = [];
 
-    const container = getLiveRegion();
-    if (container) container.setAttribute('aria-live', 'polite');
-
     if (autoPlaySettings.postFocus === 1) {
         silentVisualUpdate(startingVerseIndex);
     }
+
+    // Orientation TTS Ticket
+    const targetIndex = autoPlaySettings.postFocus === 1 ? startingVerseIndex : currentVerseIndex;
+    const targetVerse = memoryCache[targetIndex];
+    const startVerse = memoryCache[startingVerseIndex];
+
+    let msg = `Verse ${targetVerse.verse}`;
+    if (targetVerse.book_name !== startVerse.book_name) {
+        msg = `${targetVerse.book_name} Chapter ${targetVerse.chapter}, verse ${targetVerse.verse}`;
+    } else if (targetVerse.chapter !== startVerse.chapter) {
+        msg = `Chapter ${targetVerse.chapter}, verse ${targetVerse.verse}`;
+    }
+
+    const selectedVoice = curatedVoices[autoPlaySettings.voiceIndex];
+    const utterance = new SpeechSynthesisUtterance(msg);
+    if (selectedVoice && selectedVoice.installed) utterance.voice = selectedVoice.obj;
+    utterance.rate = autoPlaySettings.rate;
+
+    utterance.onend = function() {
+        const container = getLiveRegion();
+        if (container) container.setAttribute('aria-live', 'polite');
+    };
+    window.speechSynthesis.speak(utterance);
 }

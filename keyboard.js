@@ -91,7 +91,9 @@ export function setCurrentSearchResultIndex(val) { currentSearchResultIndex = va
 function getAutoPlayMenuString(index) {
     const transitions = ["Chime", "Numbers", "Seamless"];
     const postFocus = ["Stay at stopped verse", "Return to start"];
-    const ranges = ["End of Chapter", "End of Book", "Next 5 Verses", "Next 10 Verses"];
+    const units = ["Verses", "Chapters", "Books"];
+    const amountVals = [0, 1, 2, 3, 4, 5, 10, 15, 25, 50];
+    const amountLabels = ["End of Current", "1", "2", "3", "4", "5", "10", "15", "25", "50"];
     const voiceName = curatedVoices[autoPlaySettings.voiceIndex]?.display || "Loading...";
     const rateVal = autoPlaySettings.rate.toFixed(1) + "x";
 
@@ -100,7 +102,8 @@ function getAutoPlayMenuString(index) {
         `Rate: ${rateVal}`,
         `Transition: ${transitions[autoPlaySettings.transition]}`,
         `Post-Focus: ${postFocus[autoPlaySettings.postFocus]}`,
-        `Range: ${ranges[autoPlaySettings.range]}`
+        `Unit: ${units[autoPlaySettings.unit]}`,
+        `Amount: ${amountLabels[autoPlaySettings.amount]}`
     ];
     return options[index];
 }
@@ -248,7 +251,7 @@ export function handleInput(event) {
         }
 
         if (key === 'ArrowDown') {
-            currentMenuIndex = (currentMenuIndex + 1) % 5;
+            currentMenuIndex = (currentMenuIndex + 1) % 6;
             playAutoPlayUI('nav');
             const displayString = getAutoPlayMenuString(currentMenuIndex);
             updateVisualBuffer("AUTO PLAY MENU", getAutoPlayMenuString(currentMenuIndex));
@@ -257,7 +260,7 @@ export function handleInput(event) {
         }
 
         if (key === 'ArrowUp') {
-            currentMenuIndex = (currentMenuIndex - 1 + 5) % 5;
+            currentMenuIndex = (currentMenuIndex - 1 + 6) % 6;
             playAutoPlayUI('nav');
             const displayString = getAutoPlayMenuString(currentMenuIndex);
             updateVisualBuffer("AUTO PLAY MENU", getAutoPlayMenuString(currentMenuIndex));
@@ -280,7 +283,9 @@ export function handleInput(event) {
             } else if (currentMenuIndex === 3) {
                 autoPlaySettings.postFocus = (autoPlaySettings.postFocus + delta + 2) % 2;
             } else if (currentMenuIndex === 4) {
-                autoPlaySettings.range = (autoPlaySettings.range + delta + 4) % 4;
+                autoPlaySettings.unit = (autoPlaySettings.unit + delta + 3) % 3;
+            } else if (currentMenuIndex === 5) {
+                autoPlaySettings.amount = (autoPlaySettings.amount + delta + 10) % 10;
             }
 
             saveAutoPlaySettings();
