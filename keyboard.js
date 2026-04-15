@@ -55,6 +55,7 @@ export let isVerseMode = false;
 export let isSearchMode = false;
 export let isNoteMode = false;
 export let isMenuMode = false;
+export let currentMenuTitle = "";
 export let isKeyboardExplorer = false;
 export let isHelpMode = false;
 export let searchResults = [];
@@ -67,6 +68,7 @@ export function clearAllModes() {
     isBookSearchMode = false; isChapterMode = false; isVerseMode = false;
     isSearchMode = false; isNoteMode = false; isMenuMode = false;
     isHelpMode = false; isKeyboardExplorer = false;
+    currentMenuTitle = "";
     inputBuffer = ''; lastSearchLetter = '';
     lastBookSearchKey = '';
     currentBookSearchIndex = 0;
@@ -197,11 +199,13 @@ export function handleInput(event) {
         }
         if (event.key === 'ArrowDown') {
             currentHelpIndex = (currentHelpIndex + 1) % helpMenuData.length;
+            updateVisualBuffer("HELP MENU", helpMenuData[currentHelpIndex]);
             speak(helpMenuData[currentHelpIndex]);
             return;
         }
         if (event.key === 'ArrowUp') {
             currentHelpIndex = (currentHelpIndex - 1 + helpMenuData.length) % helpMenuData.length;
+            updateVisualBuffer("HELP MENU", helpMenuData[currentHelpIndex]);
             speak(helpMenuData[currentHelpIndex]);
             return;
         }
@@ -224,6 +228,7 @@ export function handleInput(event) {
             if (menuOptions[currentMenuIndex].startsWith("Boot Location")) {
                 announcement += ", use spacebar to change";
             }
+            updateVisualBuffer(currentMenuTitle, menuOptions[currentMenuIndex]);
             speak(announcement);
             return;
         }
@@ -234,6 +239,7 @@ export function handleInput(event) {
             if (menuOptions[currentMenuIndex].startsWith("Boot Location")) {
                 announcement += ", use spacebar to change";
             }
+            updateVisualBuffer(currentMenuTitle, menuOptions[currentMenuIndex]);
             speak(announcement);
             return;
         }
@@ -412,6 +418,8 @@ export function handleInput(event) {
         isMenuMode = true;
         menuOptions = ['Edit Note', 'Delete Note', 'Copy Verse'];
         currentMenuIndex = 0;
+        currentMenuTitle = "VERSE MENU";
+        updateVisualBuffer(currentMenuTitle, menuOptions[0]);
         speak("Verse Menu. 1 of 3: Edit Note. Up and down to navigate, Enter to select, Escape to cancel.");
         return;
     }
@@ -596,6 +604,8 @@ export function handleInput(event) {
             isMenuMode = true;
             menuOptions = ['Export Personal Notes', 'Import Personal Notes', 'Import Commentary', 'Clear Commentary', 'Boot Location: ' + bootPreference];
             currentMenuIndex = 0;
+            currentMenuTitle = "OPTIONS MENU";
+            updateVisualBuffer(currentMenuTitle, menuOptions[0]);
             speak("Options Menu. 1 of 5: Export Personal Notes. Up and down arrows to navigate, Enter to select, Escape to close.");
             break;
         case 'B':
@@ -673,6 +683,8 @@ export function handleInput(event) {
                     isMenuMode = true;
                     menuOptions = links;
                     currentMenuIndex = 0;
+                    currentMenuTitle = "OMNI-JUMP MENU";
+                    updateVisualBuffer(currentMenuTitle, menuOptions[0]);
                     speak("Omni-Jump. " + links.length + " links found. 1 of " + links.length + ": " + menuOptions[0] + ". Use arrows to select.");
                 };
 
