@@ -5,13 +5,18 @@ let activeUtterances = [];
 let audioCtx = null;
 
 // Settings State
-export const autoPlaySettings = {
+const savedSettings = JSON.parse(localStorage.getItem('autoPlaySettings'));
+export const autoPlaySettings = savedSettings || {
     transition: 0, // 0: Chime, 1: Numbers, 2: Seamless
     voiceIndex: 0,
     rate: 1.0,
     postFocus: 0, // 0: Stay at stopped verse, 1: Return to start
-    range: 0 // 0: End of Chapter, 1: 5 Verses, 2: 10 Verses
+    range: 0 // 0: End of Chapter, 1: End of Book, 2: 5 Verses, 3: 10 Verses
 };
+
+export function saveAutoPlaySettings() {
+    localStorage.setItem('autoPlaySettings', JSON.stringify(autoPlaySettings));
+}
 
 let startingVerseIndex = 0;
 export let curatedVoices = [];
@@ -146,21 +151,43 @@ function queueRemainingVerses(startIndex) {
     const selectedVoice = curatedVoices[autoPlaySettings.voiceIndex];
     const targetVoice = selectedVoice && selectedVoice.installed ? selectedVoice.obj : null;
 
+    const startVerse = memoryCache[startIndex];
     let endIndex = memoryCache.length;
-    if (autoPlaySettings.range === 1) endIndex = Math.min(startIndex + 5, memoryCache.length);
-    else if (autoPlaySettings.range === 2) endIndex = Math.min(startIndex + 10, memoryCache.length);
+
+    if (autoPlaySettings.range === 0) {
+        for (let i = startIndex; i < memoryCache.length; i++) {
+            if (memoryCache[i].book_name !== startVerse.book_name || memoryCache[i].chapter !== startVerse.chapter) { endIndex = i; break; }
+        }
+    } else if (autoPlaySettings.range === 1) {
+        for (let i = startIndex; i < memoryCache.length; i++) {
+            if (memoryCache[i].book_name !== startVerse.book_name) { endIndex = i; break; }
+        }
+    } else if (autoPlaySettings.range === 2) {
+        endIndex = Math.min(startIndex + 5, memoryCache.length);
+    } else if (autoPlaySettings.range === 3) {
+        endIndex = Math.min(startIndex + 10, memoryCache.length);
+    }
 
     for (let i = startIndex; i < endIndex; i++) {
         const verseObj = memoryCache[i];
         let textToSpeak = verseObj.text;
 
+        let prefix = "";
         if (i === startIndex) {
-            textToSpeak = `${verseObj.book_name} Chapter ${verseObj.chapter}. ${textToSpeak}`;
-        } else if (autoPlaySettings.transition === 1) {
-            textToSpeak = `${verseObj.verse}. ${textToSpeak}`;
-        } else if (autoPlaySettings.transition === 0) {
-            textToSpeak = '... ' + textToSpeak;
+            prefix = `${verseObj.book_name} Chapter ${verseObj.chapter}. `;
+        } else {
+            const prevVerse = memoryCache[i - 1];
+            if (verseObj.book_name !== prevVerse.book_name) {
+                prefix = `${verseObj.book_name} Chapter ${verseObj.chapter}. `;
+            } else if (verseObj.chapter !== prevVerse.chapter) {
+                prefix = `Chapter ${verseObj.chapter}. `;
+            } else if (autoPlaySettings.transition === 1) {
+                prefix = `${verseObj.verse}. `;
+            } else if (autoPlaySettings.transition === 0) {
+                prefix = "... ";
+            }
         }
+        textToSpeak = prefix + textToSpeak;
 
         const utterance = new SpeechSynthesisUtterance(textToSpeak);
         if (targetVoice) utterance.voice = targetVoice;
@@ -202,7 +229,7 @@ export function stopAutoPlay(autoEnd = false) {
     const container = getLiveRegion();
     if (container) container.setAttribute('aria-live', 'polite');
 
-    if (!autoEnd && autoPlaySettings.postFocus === 1) {
+    if (autoPlaySettings.postFocus === 1) {
         silentVisualUpdate(startingVerseIndex);
     }
 }

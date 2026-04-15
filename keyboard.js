@@ -18,7 +18,7 @@ import {
 import { 
     playNextTrack, cycleVolume, playTone, silenceBootAudio 
 } from './audio.js';
-import { startAutoPlay, pauseAutoPlay, stopAutoPlay, isAutoPlaying, autoPlaySettings, curatedVoices, playAutoPlayUI } from './autoplay.js';
+import { startAutoPlay, pauseAutoPlay, stopAutoPlay, isAutoPlaying, autoPlaySettings, curatedVoices, playAutoPlayUI, saveAutoPlaySettings } from './autoplay.js';
 import { helpMenuData, NOTES_STORE, COMMENTARY_STORE, THEMES, muteTutorialPrompt, setMuteTutorialPrompt } from './config.js';
 
 const visualBuffer = document.getElementById('visual-buffer');
@@ -91,7 +91,7 @@ export function setCurrentSearchResultIndex(val) { currentSearchResultIndex = va
 function getAutoPlayMenuString(index) {
     const transitions = ["Chime", "Numbers", "Seamless"];
     const postFocus = ["Stay at stopped verse", "Return to start"];
-    const ranges = ["End of Chapter", "Next 5 Verses", "Next 10 Verses"];
+    const ranges = ["End of Chapter", "End of Book", "Next 5 Verses", "Next 10 Verses"];
     const voiceName = curatedVoices[autoPlaySettings.voiceIndex]?.display || "Loading...";
     const rateVal = autoPlaySettings.rate.toFixed(1) + "x";
 
@@ -280,10 +280,10 @@ export function handleInput(event) {
             } else if (currentMenuIndex === 3) {
                 autoPlaySettings.postFocus = (autoPlaySettings.postFocus + delta + 2) % 2;
             } else if (currentMenuIndex === 4) {
-                if (keyUpper === 'ARROWLEFT') autoPlaySettings.range = Math.max(0, autoPlaySettings.range - 1);
-                else autoPlaySettings.range = Math.min(2, autoPlaySettings.range + 1);
+                autoPlaySettings.range = (autoPlaySettings.range + delta + 4) % 4;
             }
 
+            saveAutoPlaySettings();
             playAutoPlayUI('change');
             const displayString = getAutoPlayMenuString(currentMenuIndex);
             updateVisualBuffer("AUTO PLAY MENU", getAutoPlayMenuString(currentMenuIndex));
