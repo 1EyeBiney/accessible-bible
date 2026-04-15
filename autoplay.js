@@ -9,7 +9,8 @@ export const autoPlaySettings = {
     transition: 0, // 0: Chime, 1: Numbers, 2: Seamless
     voiceIndex: 0,
     rate: 1.0,
-    postFocus: 0 // 0: Stay at stopped verse, 1: Return to start
+    postFocus: 0, // 0: Stay at stopped verse, 1: Return to start
+    range: 0 // 0: End of Chapter, 1: 5 Verses, 2: 10 Verses
 };
 
 let startingVerseIndex = 0;
@@ -51,6 +52,78 @@ function playChime() {
     osc.stop(audioCtx.currentTime + 0.4);
 }
 
+export function playAutoPlayUI(type) {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    const now = audioCtx.currentTime;
+
+    switch(type) {
+        case 'open':
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(400, now);
+            osc.frequency.exponentialRampToValueAtTime(800, now + 0.15);
+            gain.gain.setValueAtTime(0.2, now); // Increased volume
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+            osc.start(now); osc.stop(now + 0.15);
+            break;
+        case 'close':
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(800, now);
+            osc.frequency.exponentialRampToValueAtTime(400, now + 0.15);
+            gain.gain.setValueAtTime(0.2, now); // Increased volume
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+            osc.start(now); osc.stop(now + 0.15);
+            break;
+        case 'nav':
+            osc.type = 'square'; // Swapped from triangle to square for more bite
+            osc.frequency.setValueAtTime(300, now);
+            gain.gain.setValueAtTime(0.2, now); // Increased volume
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+            osc.start(now); osc.stop(now + 0.08);
+            break;
+        case 'change': // Tiny bright click (Left/Right)
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(600, now);
+            gain.gain.setValueAtTime(0.1, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+            osc.start(now); osc.stop(now + 0.05);
+            break;
+        case 'play': // Warm ascending chord
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(440, now);
+            osc.frequency.linearRampToValueAtTime(554, now + 0.2); // A4 to C#5
+            gain.gain.setValueAtTime(0.1, now);
+            gain.gain.linearRampToValueAtTime(0, now + 0.2);
+            osc.start(now); osc.stop(now + 0.2);
+            break;
+        case 'stop': // Dull descending thud
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(300, now);
+            osc.frequency.exponentialRampToValueAtTime(100, now + 0.2);
+            gain.gain.setValueAtTime(0.1, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+            osc.start(now); osc.stop(now + 0.2);
+            break;
+        case 'finish': // Bright success double-chime
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(523.25, now); // C5
+            osc.frequency.setValueAtTime(659.25, now + 0.15); // E5
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.1, now + 0.02);
+            gain.gain.linearRampToValueAtTime(0, now + 0.15);
+            gain.gain.linearRampToValueAtTime(0.1, now + 0.17);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+            osc.start(now); osc.stop(now + 0.5);
+            break;
+    }
+}
+
 export function startAutoPlay() {
     if (isAutoPlaying) return;
     if (curatedVoices.length === 0) initVoices();
@@ -73,7 +146,11 @@ function queueRemainingVerses(startIndex) {
     const selectedVoice = curatedVoices[autoPlaySettings.voiceIndex];
     const targetVoice = selectedVoice && selectedVoice.installed ? selectedVoice.obj : null;
 
-    for (let i = startIndex; i < memoryCache.length; i++) {
+    let endIndex = memoryCache.length;
+    if (autoPlaySettings.range === 1) endIndex = Math.min(startIndex + 5, memoryCache.length);
+    else if (autoPlaySettings.range === 2) endIndex = Math.min(startIndex + 10, memoryCache.length);
+
+    for (let i = startIndex; i < endIndex; i++) {
         const verseObj = memoryCache[i];
         let textToSpeak = verseObj.text;
 
@@ -94,10 +171,11 @@ function queueRemainingVerses(startIndex) {
         };
 
         utterance.onend = function() {
-            if (autoPlaySettings.transition === 0 && i < memoryCache.length - 1 && isAutoPlaying) {
+            if (autoPlaySettings.transition === 0 && i < endIndex - 1 && isAutoPlaying) {
                 playChime();
             }
-            if (i === memoryCache.length - 1) {
+            if (i === endIndex - 1) {
+                if (isAutoPlaying) playAutoPlayUI('finish');
                 stopAutoPlay(true);
             }
         };

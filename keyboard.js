@@ -18,7 +18,7 @@ import {
 import { 
     playNextTrack, cycleVolume, playTone, silenceBootAudio 
 } from './audio.js';
-import { startAutoPlay, pauseAutoPlay, stopAutoPlay, isAutoPlaying, autoPlaySettings, curatedVoices } from './autoplay.js';
+import { startAutoPlay, pauseAutoPlay, stopAutoPlay, isAutoPlaying, autoPlaySettings, curatedVoices, playAutoPlayUI } from './autoplay.js';
 import { helpMenuData, NOTES_STORE, COMMENTARY_STORE, THEMES, muteTutorialPrompt, setMuteTutorialPrompt } from './config.js';
 
 const visualBuffer = document.getElementById('visual-buffer');
@@ -88,19 +88,21 @@ export function getNoteMode() { return isNoteMode; }
 export function setSearchResults(val) { searchResults = val; }
 export function setCurrentSearchResultIndex(val) { currentSearchResultIndex = val; }
 
-function getAutoPlayMenuDisplayString() {
-    if (currentMenuIndex === 0) {
-        return "Voice: " + (curatedVoices[autoPlaySettings.voiceIndex]?.display || "Loading...");
-    }
-    if (currentMenuIndex === 1) {
-        return `Rate: ${autoPlaySettings.rate.toFixed(1)}`;
-    }
-    if (currentMenuIndex === 2) {
-        const transitionLabels = ['Chime', 'Numbers', 'Seamless'];
-        return `Transition: ${transitionLabels[autoPlaySettings.transition] || 'Unknown'}`;
-    }
-    const postFocusLabels = ['Stay at stopped verse', 'Return to start'];
-    return `Post-Focus: ${postFocusLabels[autoPlaySettings.postFocus] || 'Unknown'}`;
+function getAutoPlayMenuString(index) {
+    const transitions = ["Chime", "Numbers", "Seamless"];
+    const postFocus = ["Stay at stopped verse", "Return to start"];
+    const ranges = ["End of Chapter", "Next 5 Verses", "Next 10 Verses"];
+    const voiceName = curatedVoices[autoPlaySettings.voiceIndex]?.display || "Loading...";
+    const rateVal = autoPlaySettings.rate.toFixed(1) + "x";
+
+    const options = [
+        `1 of 5. Voice: ${voiceName} (${autoPlaySettings.voiceIndex + 1} of ${curatedVoices.length} available)`,
+        `2 of 5. Rate: ${rateVal}`,
+        `3 of 5. Transition: ${transitions[autoPlaySettings.transition]}`,
+        `4 of 5. Post-Focus: ${postFocus[autoPlaySettings.postFocus]}`,
+        `5 of 5. Range: ${ranges[autoPlaySettings.range]}`
+    ];
+    return options[index];
 }
 
 export function handleInput(event) {
@@ -196,6 +198,7 @@ export function handleInput(event) {
     const keyUpper = key.toUpperCase();
 
     if (isAutoPlaying && !['A', 'P', 'S', 'SHIFT', 'CONTROL', 'ALT'].includes(keyUpper) && !isAutoPlayMenuMode) {
+        playAutoPlayUI('stop');
         stopAutoPlay();
     }
 
@@ -238,23 +241,26 @@ export function handleInput(event) {
         event.preventDefault();
 
         if (key === 'Escape') {
+            playAutoPlayUI('close');
             clearAllModes();
             speak('Auto Play menu closed');
             return;
         }
 
         if (key === 'ArrowDown') {
-            currentMenuIndex = (currentMenuIndex + 1) % 4;
-            const displayString = getAutoPlayMenuDisplayString();
-            updateVisualBuffer('AUTO PLAY MENU', displayString);
+            currentMenuIndex = (currentMenuIndex + 1) % 5;
+            playAutoPlayUI('nav');
+            const displayString = getAutoPlayMenuString(currentMenuIndex);
+            updateVisualBuffer("AUTO PLAY MENU", getAutoPlayMenuString(currentMenuIndex));
             speak(displayString);
             return;
         }
 
         if (key === 'ArrowUp') {
-            currentMenuIndex = (currentMenuIndex - 1 + 4) % 4;
-            const displayString = getAutoPlayMenuDisplayString();
-            updateVisualBuffer('AUTO PLAY MENU', displayString);
+            currentMenuIndex = (currentMenuIndex - 1 + 5) % 5;
+            playAutoPlayUI('nav');
+            const displayString = getAutoPlayMenuString(currentMenuIndex);
+            updateVisualBuffer("AUTO PLAY MENU", getAutoPlayMenuString(currentMenuIndex));
             speak(displayString);
             return;
         }
@@ -273,10 +279,14 @@ export function handleInput(event) {
                 autoPlaySettings.transition = (autoPlaySettings.transition + delta + 3) % 3;
             } else if (currentMenuIndex === 3) {
                 autoPlaySettings.postFocus = (autoPlaySettings.postFocus + delta + 2) % 2;
+            } else if (currentMenuIndex === 4) {
+                if (keyUpper === 'ARROWLEFT') autoPlaySettings.range = Math.max(0, autoPlaySettings.range - 1);
+                else autoPlaySettings.range = Math.min(2, autoPlaySettings.range + 1);
             }
 
-            const displayString = getAutoPlayMenuDisplayString();
-            updateVisualBuffer('AUTO PLAY MENU', displayString);
+            playAutoPlayUI('change');
+            const displayString = getAutoPlayMenuString(currentMenuIndex);
+            updateVisualBuffer("AUTO PLAY MENU", getAutoPlayMenuString(currentMenuIndex));
             speak(displayString);
             return;
         }
@@ -387,6 +397,7 @@ export function handleInput(event) {
     }
 
     if (key === 'Escape') {
+        if (isAutoPlayMenuMode) { playAutoPlayUI('close'); }
         clearAllModes();
         event.preventDefault();
         speak("Search and modes cleared.");
@@ -685,12 +696,13 @@ export function handleInput(event) {
             isAutoPlayMenuMode = true;
             currentMenuTitle = 'AUTO PLAY MENU';
             currentMenuIndex = 0;
-            updateVisualBuffer(currentMenuTitle, "Voice: " + (curatedVoices[autoPlaySettings.voiceIndex]?.display || "Loading..."));
+            playAutoPlayUI('open');
+            updateVisualBuffer(currentMenuTitle, "Auto Play Menu. Use up and down arrows to navigate the menu. Use left and right arrows to cycle selections. Use Escape to save selections and exit. " + getAutoPlayMenuString(0));
             break;
         case 'P':
             event.preventDefault();
-            if (isAutoPlaying) pauseAutoPlay();
-            else startAutoPlay();
+            if (isAutoPlaying) { playAutoPlayUI('stop'); pauseAutoPlay(); }
+            else { playAutoPlayUI('play'); startAutoPlay(); }
             break;
         case 'B':
             event.preventDefault();
@@ -811,6 +823,7 @@ export function handleInput(event) {
         case 'S': {
             event.preventDefault();
             if (isAutoPlaying) {
+                playAutoPlayUI('stop');
                 stopAutoPlay();
                 break;
             }
