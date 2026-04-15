@@ -96,11 +96,11 @@ function getAutoPlayMenuString(index) {
     const rateVal = autoPlaySettings.rate.toFixed(1) + "x";
 
     const options = [
-        `1 of 5. Voice: ${voiceName} (${autoPlaySettings.voiceIndex + 1} of ${curatedVoices.length} available)`,
-        `2 of 5. Rate: ${rateVal}`,
-        `3 of 5. Transition: ${transitions[autoPlaySettings.transition]}`,
-        `4 of 5. Post-Focus: ${postFocus[autoPlaySettings.postFocus]}`,
-        `5 of 5. Range: ${ranges[autoPlaySettings.range]}`
+        `Voice: ${voiceName} (${autoPlaySettings.voiceIndex + 1} of ${curatedVoices.length} available)`,
+        `Rate: ${rateVal}`,
+        `Transition: ${transitions[autoPlaySettings.transition]}`,
+        `Post-Focus: ${postFocus[autoPlaySettings.postFocus]}`,
+        `Range: ${ranges[autoPlaySettings.range]}`
     ];
     return options[index];
 }
@@ -697,7 +697,9 @@ export function handleInput(event) {
             currentMenuTitle = 'AUTO PLAY MENU';
             currentMenuIndex = 0;
             playAutoPlayUI('open');
-            updateVisualBuffer(currentMenuTitle, "Auto Play Menu. Use up and down arrows to navigate the menu. Use left and right arrows to cycle selections. Use Escape to save selections and exit. " + getAutoPlayMenuString(0));
+            const introText = "Auto Play Menu. Use up and down arrows to navigate the menu. Use left and right arrows to cycle selections. Use Escape to save selections and exit. " + getAutoPlayMenuString(0);
+            updateVisualBuffer(currentMenuTitle, introText);
+            speak(introText);
             break;
         case 'P':
             event.preventDefault();

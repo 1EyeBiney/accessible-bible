@@ -115,9 +115,9 @@ export function playAutoPlayUI(type) {
             osc.frequency.setValueAtTime(523.25, now); // C5
             osc.frequency.setValueAtTime(659.25, now + 0.15); // E5
             gain.gain.setValueAtTime(0, now);
-            gain.gain.linearRampToValueAtTime(0.1, now + 0.02);
+            gain.gain.linearRampToValueAtTime(0.3, now + 0.02);
             gain.gain.linearRampToValueAtTime(0, now + 0.15);
-            gain.gain.linearRampToValueAtTime(0.1, now + 0.17);
+            gain.gain.linearRampToValueAtTime(0.3, now + 0.17);
             gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
             osc.start(now); osc.stop(now + 0.5);
             break;
@@ -157,7 +157,7 @@ function queueRemainingVerses(startIndex) {
         if (i === startIndex) {
             textToSpeak = `${verseObj.book_name} Chapter ${verseObj.chapter}. ${textToSpeak}`;
         } else if (autoPlaySettings.transition === 1) {
-            textToSpeak = `Verse ${verseObj.verse}. ${textToSpeak}`;
+            textToSpeak = `${verseObj.verse}. ${textToSpeak}`;
         } else if (autoPlaySettings.transition === 0) {
             textToSpeak = '... ' + textToSpeak;
         }
