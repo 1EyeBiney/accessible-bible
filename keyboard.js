@@ -10,7 +10,7 @@ import {
     startWelcomeSequence, endWelcomeSequence, startTutorialSequence, endTutorialSequence,
     updateTutorialChapter, playTutorialChapter, getKeyboardExplorerDescription, navigateBookmarks,
     toggleCurrentBookmark, parseLinkTarget, isWelcomeMode, isTutorialMode, setWelcomeMode, setTutorialMode,
-    bootOptions, bootPreference, cycleBootPreference, copyToClipboard
+    bootOptions, bootPreference, cycleBootPreference, copyToClipboard, resetBookmarkJumps
 } from './app.js';
 import { 
     memoryCache, db, bookmarksCache, loadToMemory 
@@ -59,6 +59,7 @@ export let isKeyboardExplorer = false;
 export let isHelpMode = false;
 export let searchResults = [];
 export let currentSearchResultIndex = -1;
+export let consecutiveSearchJumps = 0;
 export let menuOptions = [];
 export let currentMenuIndex = 0;
 
@@ -164,6 +165,13 @@ export function handleInput(event) {
         }
 
         return;
+    }
+
+    if (key !== 'Shift' && key !== 'Control' && key !== 'Alt') {
+        const isSearchNav = !event.shiftKey && (key === '[' || key === ']');
+        const isBookmarkNav = event.shiftKey && (key === '{' || key === '}' || key === '[' || key === ']');
+        if (!isSearchNav) consecutiveSearchJumps = 0;
+        if (!isBookmarkNav) resetBookmarkJumps();
     }
 
     const keyUpper = key.toUpperCase();
@@ -348,11 +356,15 @@ export function handleInput(event) {
             searchBadge.style.display = 'inline-block';
             searchBadge.textContent = `SEARCH [${currentSearchResultIndex + 1} of ${searchResults.length}]`;
         }
-        speak(
-            "Match " + (currentSearchResultIndex + 1) + " of " + searchResults.length + ": " +
-            memoryCache[currentVerseIndex].book_name + " " + memoryCache[currentVerseIndex].chapter + ":" +
-            memoryCache[currentVerseIndex].verse + " - " + memoryCache[currentVerseIndex].text
-        );
+        const v = memoryCache[currentVerseIndex];
+        let prefix = "";
+        if (consecutiveSearchJumps === 0) {
+            prefix = `Match ${currentSearchResultIndex + 1} of ${searchResults.length}: ${v.book_name} chapter ${v.chapter}, verse ${v.verse} - `;
+        } else {
+            prefix = `${currentSearchResultIndex + 1}: ${v.book_name} chapter ${v.chapter}, verse ${v.verse} - `;
+        }
+        consecutiveSearchJumps++;
+        speak(prefix + v.text);
         return;
     }
 

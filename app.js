@@ -6,7 +6,7 @@
 import { DB_NAME, DB_VERSION, TEXT_STORE, NOTES_STORE, BOOKMARKS_STORE, COMMENTARY_STORE, helpMenuData, AUDIO_GAIN_BOOST, THEMES, tutorialChapters, hymnList, volumeStages, muteTutorialPrompt } from './config.js';
 import { speak, announcer } from './ui.js';
 import {
-    initAudio, playTone, playSequence, playNoteIndicator, playCommentaryCue,
+    initAudio, playTone, playSequence, playNoteIndicator, playCommentaryCue, playBookmarkCue,
     playNextTrack, silenceBootAudio, cycleVolume,
     audioCtx, audioA, audioB, activeAudio, currentVolumeIndex, crossfadeTimer
 } from './audio.js';
@@ -16,6 +16,8 @@ import { handleInput, clearAllModes, setSearchMode, setNoteMode, getSearchMode, 
 // --- Global State ---
 export let currentVerseIndex = 0; 
 export let currentBookName = '';
+export let consecutiveBookmarkJumps = 0;
+export function resetBookmarkJumps() { consecutiveBookmarkJumps = 0; }
 let lastSearchLetter = '';
 let inputBuffer = '';
 let currentBookmarkIndex = -1;
@@ -140,6 +142,7 @@ export function toggleCurrentBookmark() {
         bookmarkBadge.style.display = 'inline-block';
         bookmarkBadge.textContent = `BOOKMARK [${currentBookmarkIndex + 1} of ${bookmarksCache.length}]`;
     }
+    playBookmarkCue();
     speak("Bookmark added.");
 }
 
@@ -174,11 +177,20 @@ export function navigateBookmarks(direction) {
         bookmarkBadge.style.display = 'inline-block';
         bookmarkBadge.textContent = `BOOKMARK [${currentBookmarkIndex + 1} of ${bookmarksCache.length}]`;
     }
-    readCurrentVerse();
+    const v = memoryCache[currentVerseIndex];
+    let customPrefix = "";
+    if (consecutiveBookmarkJumps === 0) {
+        customPrefix = `Bookmark ${currentBookmarkIndex + 1} of ${bookmarksCache.length}: ${v.book_name} chapter ${v.chapter}, verse ${v.verse} - `;
+    } else {
+        customPrefix = `${currentBookmarkIndex + 1}: ${v.book_name} chapter ${v.chapter}, verse ${v.verse} - `;
+    }
+    consecutiveBookmarkJumps++;
+
+    readCurrentVerse(false, customPrefix);
 }
 
 // --- Core Navigation Logic ---
-export function readCurrentVerse(forceFull = false) {
+export function readCurrentVerse(forceFull = false, customPrefix = null) {
     if (!isReady || memoryCache.length === 0) return;
 
     document.getElementById('alert-note').style.display = 'none';
@@ -197,16 +209,21 @@ export function readCurrentVerse(forceFull = false) {
     };
 
     let prefix;
-    if (forceFull || verseObj.book_name !== lastAnnouncedBook) {
-        prefix = `${verseObj.book_name} chapter ${verseObj.chapter}, verse ${verseObj.verse}: `;
-    } else if (verseObj.chapter !== lastAnnouncedChapter) {
-        prefix = `Chapter ${verseObj.chapter}, verse ${verseObj.verse}: `;
+    if (customPrefix !== null) {
+        prefix = customPrefix;
+        lastAnnouncedBook = verseObj.book_name;
+        lastAnnouncedChapter = verseObj.chapter;
     } else {
-        prefix = `${verseObj.verse}: `;
+        if (forceFull || verseObj.book_name !== lastAnnouncedBook) {
+            prefix = `${verseObj.book_name} chapter ${verseObj.chapter}, verse ${verseObj.verse}: `;
+        } else if (verseObj.chapter !== lastAnnouncedChapter) {
+            prefix = `Chapter ${verseObj.chapter}, verse ${verseObj.verse}: `;
+        } else {
+            prefix = `${verseObj.verse}: `;
+        }
+        lastAnnouncedBook = verseObj.book_name;
+        lastAnnouncedChapter = verseObj.chapter;
     }
-
-    lastAnnouncedBook = verseObj.book_name;
-    lastAnnouncedChapter = verseObj.chapter;
 
     // Initial visual render uses synchronous flags; link flag is resolved from note content below.
     renderVisualVerse(false);
@@ -233,6 +250,9 @@ export function readCurrentVerse(forceFull = false) {
         if (commRequest.result) {
             setTimeout(() => playCommentaryCue(), 150);
             document.getElementById('alert-comm').style.display = 'block';
+        }
+        if (bookmarksCache.includes(memoryCache[currentVerseIndex].id)) {
+            setTimeout(() => playBookmarkCue(), 300);
         }
     };
 }

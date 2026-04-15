@@ -1,4 +1,4 @@
-# ACCESSIBLE BIBLE ENGINE: MASTER WATCHDOG DIRECTIVE (v0.33.0)
+# ACCESSIBLE BIBLE ENGINE: MASTER WATCHDOG DIRECTIVE (v0.36.0)
 
 ## SYSTEM INSTRUCTION:
 You are the Systems Architect for a high-performance, keyboard-centric Bible study tool. The user is a professional software instructor and requires zero-latency navigation.
@@ -78,6 +78,9 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 - **Theme Carousel:** `[T]` advances `currentThemeIndex` through the `THEMES` array (`['default', 'midnight', 'amber', 'macular', 'cyan']`), setting or removing `data-theme` on `<body>`. Active theme name is spoken via TTS.
 - **Visual HUD:** `#visual-hud` is a fixed footer bar (border in `--accent-color`) displaying a static key-legend for sighted users. `aria-hidden="true"` keeps it invisible to screen readers.
 - **Alert Pills:** `#alert-note` and `#alert-comm` are fixed top-right badges. Both are hidden (`display: none`) at the start of every `readCurrentVerse()` call. `#alert-note` is revealed when an IndexedDB note query returns a non-empty result; `#alert-comm` is revealed when a commentary query returns a hit. Both pills are styled with CSS variable colors so they remain legible across all themes.
+- **Visual Echo Engine:** A centered `#visual-buffer` modal captures and displays live typing and mode instructions for sighted users. It provides real-time character echoing for Word Search (F), Book Search (B), Chapter Jump (C), and Verse Jump (V), mitigating "ghost typing" confusion when a screen reader is not running.
+- **Dynamic Alert Badges:** The top-right `#visual-alerts` row includes dynamic `#alert-search` and `#alert-bookmark` badges. These display real-time `[X of Y]` counters that mirror the audio engine's tracking during bracket navigation.
+- **Inline Metadata Flags:** The visual render path (`readCurrentVerse`) injects high-contrast bracketed markers directly before the verse text to represent background state data: `[B]` (Bookmark present), `[R]` (Verse is Ready/Anchored for linking), and `[J]` (Omni-Jump Link detected in note).
 
 ---
 
@@ -162,3 +165,19 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 **app.js**: Created a centralized copyToClipboard utility with safety checks and error handling to manage verse exports to the system clipboard.
 **keyboard.js**: Integrated the new clipboard utility into the Verse Menu (Down Arrow), resolving the TypeError caused by accessing the clipboard API in an undefined state.
 **Architecture**: Standardized the clipboard interface to provide audio feedback for both successful copies and API failures, ensuring a consistent experience for screen reader users.
+
+### v0.34.0 — Visual Echo Engine & Data Polish
+- **Database Sanitization:** Implemented `bsb2.json` to purge hyphens, "vvv" artifacts, and formatting anomalies for cleaner TTS readouts.
+- **Visual Buffer:** Introduced a centralized `#visual-buffer` overlay to provide sighted users with a 1:1 visual echo of their keystrokes during F, B, C, and V mode inputs, complete with explicit `[ENTER]` and `[ESC]` instructions.
+- **Production Hosting:** Transitioned architecture to support static hosting on GitHub Pages with custom domain (`accessible-bible.org`) routing.
+
+### v0.35.0 — Visual Parity & Metadata Flags
+- **Dynamic Counters:** Added `SEARCH [X of Y]` and `BOOKMARK [X of Y]` badges to the visual HUD, updating synchronously with navigation indexing.
+- **Verse-Level Flags:** Engine now computes and renders `[B]`, `[R]`, and `[J]` markers directly into the DOM to visually expose bookmark, anchor, and link states.
+- **Terminology Standardization:** Purged all internal/external references to "OJ", standardizing the relational feature globally as "J" (Jump).
+- **Asynchronous Flag Resolution:** Rerouted visual rendering through `app.js` to ensure the `[J]` flag resolves accurately against the IndexedDB note payload.
+
+### v0.36.0 — Bookmark Audio Signatures
+- **Audio Engine:** Ported Sound 126 ("AI Voice Blip") from the external laboratory into the core synthesizer as `playBookmarkCue()`.
+- **Creation Feedback:** The synthetic signature triggers instantaneously upon hitting `K` to anchor a verse to the `bookmarksCache`.
+- **Navigation Feedback:** `readCurrentVerse()` evaluates the `bookmarksCache` during sequential navigation and fires the cue with a `300ms` offset, ensuring it layers cleanly beneath the TTS output and alongside the commentary ping.

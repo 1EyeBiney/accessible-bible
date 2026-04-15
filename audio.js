@@ -47,6 +47,13 @@ export function playNoteIndicator() {
     playSequence(['sine', 'sine', 'sine', 'sine'], [1000, 1500, 2000, 2500], 0.05, 0.2);
 }
 
+export function playBookmarkCue() {
+    const freqs = [400, 600, 400, 800, 400];
+    freqs.forEach((f, i) => {
+        setTimeout(() => playTone(f, 'sine', 0.04, 0.15), i * 40);
+    });
+}
+
 export function playCommentaryCue() {
     if (!audioCtx) return;
     const osc = audioCtx.createOscillator();
