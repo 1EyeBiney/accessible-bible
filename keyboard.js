@@ -32,6 +32,18 @@ function updateVisualBuffer(modeText, valueText) {
     }
 }
 
+    export function updateSearchVisualBuffer(searchText = '') {
+        if (searchText) {
+            updateVisualBuffer("SEARCH DATABASE", searchText + " | [ENTER] to Search");
+        } else {
+            updateVisualBuffer("SEARCH DATABASE", "Type to find...");
+        }
+    }
+
+    export function clearVisualBuffer() {
+        updateVisualBuffer(null);
+    }
+
 // --- Mode State ---
 export let isBookSearchMode = false;
 export let lastSearchLetter = '';
@@ -58,6 +70,10 @@ export function clearAllModes() {
     lastBookSearchKey = '';
     currentBookSearchIndex = 0;
     updateVisualBuffer(null);
+    const searchBadge = document.getElementById('alert-search');
+    if (searchBadge) searchBadge.style.display = 'none';
+    const bookmarkBadge = document.getElementById('alert-bookmark');
+    if (bookmarkBadge) bookmarkBadge.style.display = 'none';
 }
 
 export function setSearchMode(value) { isSearchMode = value; }
@@ -327,6 +343,11 @@ export function handleInput(event) {
         }
 
         updateVerseIndex(memoryCache.findIndex(v => v === searchResults[currentSearchResultIndex]));
+        const searchBadge = document.getElementById('alert-search');
+        if (searchBadge) {
+            searchBadge.style.display = 'inline-block';
+            searchBadge.textContent = `SEARCH [${currentSearchResultIndex + 1} of ${searchResults.length}]`;
+        }
         speak(
             "Match " + (currentSearchResultIndex + 1) + " of " + searchResults.length + ": " +
             memoryCache[currentVerseIndex].book_name + " " + memoryCache[currentVerseIndex].chapter + ":" +
@@ -655,6 +676,7 @@ export function handleInput(event) {
             clearAllModes();
             isSearchMode = true;
             searchInputEl.value = '';
+            updateSearchVisualBuffer('');
             searchInputEl.focus();
             speak("Word search. Type query and press Enter.");
             break;

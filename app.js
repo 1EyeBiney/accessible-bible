@@ -11,7 +11,7 @@ import {
     audioCtx, audioA, audioB, activeAudio, currentVolumeIndex, crossfadeTimer
 } from './audio.js';
 import { db, memoryCache, bookmarksCache, initDatabase, loadBookmarks, loadToMemory, setMemoryCache } from './db.js';
-import { handleInput, clearAllModes, setSearchMode, setNoteMode, getSearchMode, getNoteMode, setSearchResults, setCurrentSearchResultIndex } from './keyboard.js';
+import { handleInput, clearAllModes, setSearchMode, setNoteMode, getSearchMode, getNoteMode, setSearchResults, setCurrentSearchResultIndex, updateSearchVisualBuffer, clearVisualBuffer } from './keyboard.js';
 
 // --- Global State ---
 export let currentVerseIndex = 0; 
@@ -112,6 +112,15 @@ export function toggleCurrentBookmark() {
         currentBookmarkIndex = bookmarksCache.length === 0
             ? -1
             : Math.min(currentBookmarkIndex, bookmarksCache.length - 1);
+        const bookmarkBadge = document.getElementById('alert-bookmark');
+        if (bookmarkBadge) {
+            if (bookmarksCache.length > 0 && currentBookmarkIndex >= 0) {
+                bookmarkBadge.style.display = 'inline-block';
+                bookmarkBadge.textContent = `BOOKMARK [${currentBookmarkIndex + 1} of ${bookmarksCache.length}]`;
+            } else {
+                bookmarkBadge.style.display = 'none';
+            }
+        }
         speak("Bookmark removed.");
         return;
     }
@@ -126,6 +135,11 @@ export function toggleCurrentBookmark() {
     bookmarksCache.push(verseId);
     bookmarksCache.sort((a, b) => a - b);
     currentBookmarkIndex = bookmarksCache.indexOf(verseId);
+    const bookmarkBadge = document.getElementById('alert-bookmark');
+    if (bookmarkBadge) {
+        bookmarkBadge.style.display = 'inline-block';
+        bookmarkBadge.textContent = `BOOKMARK [${currentBookmarkIndex + 1} of ${bookmarksCache.length}]`;
+    }
     speak("Bookmark added.");
 }
 
@@ -155,6 +169,11 @@ export function navigateBookmarks(direction) {
     }
 
     currentVerseIndex = targetVerseIndex;
+    const bookmarkBadge = document.getElementById('alert-bookmark');
+    if (bookmarkBadge) {
+        bookmarkBadge.style.display = 'inline-block';
+        bookmarkBadge.textContent = `BOOKMARK [${currentBookmarkIndex + 1} of ${bookmarksCache.length}]`;
+    }
     readCurrentVerse();
 }
 
@@ -168,6 +187,15 @@ export function readCurrentVerse(forceFull = false) {
     const verseObj = memoryCache[currentVerseIndex];
     currentBookName = verseObj.book_name;
 
+    const renderVisualVerse = (hasLinkFlag = false) => {
+        let flagString = '';
+        if (bookmarksCache.includes(verseObj.id)) flagString += '[B] ';
+        if (anchoredVerseIndex >= 0 && anchoredVerseIndex === currentVerseIndex) flagString += '[R] ';
+        if (hasLinkFlag) flagString += '[J] ';
+        const visualReference = `${verseObj.book_name} ${verseObj.chapter}:${verseObj.verse}`;
+        document.getElementById('content-display').innerHTML = `<strong>${visualReference}</strong><br><br>${flagString}${verseObj.text}`;
+    };
+
     let prefix;
     if (forceFull || verseObj.book_name !== lastAnnouncedBook) {
         prefix = `${verseObj.book_name} chapter ${verseObj.chapter}, verse ${verseObj.verse}: `;
@@ -180,9 +208,8 @@ export function readCurrentVerse(forceFull = false) {
     lastAnnouncedBook = verseObj.book_name;
     lastAnnouncedChapter = verseObj.chapter;
 
-    // --- VISUAL INJECTION ---
-    const visualReference = `${verseObj.book_name} ${verseObj.chapter}:${verseObj.verse}`;
-    document.getElementById('content-display').innerHTML = `<strong>${visualReference}</strong><br><br>${verseObj.text}`;
+    // Initial visual render uses synchronous flags; link flag is resolved from note content below.
+    renderVisualVerse(false);
 
     speak(prefix + verseObj.text);
 
@@ -192,7 +219,10 @@ export function readCurrentVerse(forceFull = false) {
 
     const noteRequest = tx.objectStore(NOTES_STORE).get(verseObj.id);
     noteRequest.onsuccess = () => {
-        if (noteRequest.result && noteRequest.result.content.trim() !== '') {
+        const noteContent = noteRequest.result?.content || '';
+        const hasLinkFlag = /\[\[(.*?)\]\]/.test(noteContent);
+        renderVisualVerse(hasLinkFlag);
+        if (noteContent.trim() !== '') {
             playNoteIndicator();
             document.getElementById('alert-note').style.display = 'block';
         }
@@ -489,6 +519,9 @@ window.addEventListener('DOMContentLoaded', () => {
             event.preventDefault();
             setSearchMode(false);
             searchInput.value = '';
+            clearVisualBuffer();
+            const searchBadge = document.getElementById('alert-search');
+            if (searchBadge) searchBadge.style.display = 'none';
             focusTrap.focus();
             speak("Search cancelled.");
             return;
@@ -497,17 +530,28 @@ window.addEventListener('DOMContentLoaded', () => {
         if (event.key === 'Enter') {
             event.preventDefault();
             const query = searchInput.value.trim().toLowerCase();
-            if (!query) return;
+            if (!query) {
+                updateSearchVisualBuffer('');
+                return;
+            }
 
             const results = memoryCache.filter(v => v.text.toLowerCase().includes(query)); setSearchResults(results);
 
             if (results.length === 0) {
+                const searchBadge = document.getElementById('alert-search');
+                if (searchBadge) searchBadge.style.display = 'none';
                 speak("No matches found for " + query);
                 return;
             }
 
             setCurrentSearchResultIndex(0);
             setSearchMode(false);
+            clearVisualBuffer();
+            const searchBadge = document.getElementById('alert-search');
+            if (searchBadge) {
+                searchBadge.style.display = 'inline-block';
+                searchBadge.textContent = `SEARCH [${1} of ${results.length}]`;
+            }
             focusTrap.focus();
 
             updateVerseIndex(memoryCache.findIndex(v => v === results[0]));
@@ -517,6 +561,10 @@ window.addEventListener('DOMContentLoaded', () => {
                 results[0].verse + ": " + results[0].text
             );
         }
+    });
+
+    searchInput.addEventListener('input', () => {
+        updateSearchVisualBuffer(searchInput.value.trim());
     });
 
     noteEditor.addEventListener('keydown', (event) => {
