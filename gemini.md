@@ -1,4 +1,4 @@
-# ACCESSIBLE BIBLE ENGINE: MASTER WATCHDOG DIRECTIVE (v0.36.0)
+# ACCESSIBLE BIBLE ENGINE: MASTER WATCHDOG DIRECTIVE (v0.38.2)
 
 ## SYSTEM INSTRUCTION:
 You are the Systems Architect for a high-performance, keyboard-centric Bible study tool. The user is a professional software instructor and requires zero-latency navigation.
@@ -44,12 +44,14 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 - **KeyK:** Toggle bookmark for the current verse (add/remove, max 10 bookmarks).
 - **Shift + [:** Previous bookmark in the bookmark carousel.
 - **Shift + ]:** Next bookmark in the bookmark carousel.
-- **KeyS:** Chapter Status Report. Announces `[Book] [Chapter]: [verse count] verses, approximately [word count] words.`
+- **KeyS:** Chapter Status Report (when standard navigating) OR Stop Auto Play (when continuous reading is active).
+- **KeyA:** Opens the Auto Play Menu to configure continuous reading settings.
+- **KeyP:** Play or Pause Auto Play continuous reading.
 - **KeyTab:** 'Where am I?' status. Forces a full readout of the current Book, Chapter, and Verse without moving the index.
 - **F12:** Toggle Keyboard Explorer mode on. While active, keys are announced instead of routed to navigation.
 - **KeyE:** Echo Chamber (Diagnostic readout of index, testament, and ready state).
-- **KeyO:** Opens the Options Menu to import/export backups and load commentary modules.
-- **Escape:** Global clear. Wipes search carousel and any pending digit buffers. Also exits Keyboard Explorer mode.
+- **KeyO:** Opens the Options Menu to import/export backups, load commentary modules, and change settings.
+- **Escape:** Global clear. Wipes search carousel and any pending digit buffers. Closes open menus. Exits Keyboard Explorer mode.
 - **Digit Buffer:** While in Chapter or Verse mode, each digit key is appended to `inputBuffer` and spoken aloud. Enter commits; Escape cancels. Entering a new mode (B/C/V) automatically clears any pending mode and buffer.
 
 ### 4. Input Protocol
@@ -181,3 +183,20 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 - **Audio Engine:** Ported Sound 126 ("AI Voice Blip") from the external laboratory into the core synthesizer as `playBookmarkCue()`.
 - **Creation Feedback:** The synthetic signature triggers instantaneously upon hitting `K` to anchor a verse to the `bookmarksCache`.
 - **Navigation Feedback:** `readCurrentVerse()` evaluates the `bookmarksCache` during sequential navigation and fires the cue with a `300ms` offset, ensuring it layers cleanly beneath the TTS output and alongside the commentary ping.
+
+### v0.37.0 — Options Menu Visuals
+- **Menu Architecture:** Replaced invisible key-based options with a dynamic visual menu UI using the central `updateVisualBuffer` for enhanced state display.
+
+### v0.38.0 — Auto Play Engine & Menu
+- **Continuous Reading:** Implemented a standalone Web Speech API engine (`autoplay.js`) featuring batch-loading architecture to prevent cloud voice drop-offs, completely bypassing standard screen reader TTS for seamless playback.
+- **Auto Play Menu:** Mapped the `A` key to a dedicated, isolated settings menu allowing users to configure Transition Style (Chimes/Numbers), System Voices, Speech Rate, and Post-Playback Focus.
+- **Intelligent ARIA Muting:** Engineered dynamic `aria-live` toggling during continuous playback to ensure the user's primary screen reader does not talk over the high-fidelity neural voices. Added global input interruption to instantly restore ARIA state if the user manually navigates during Auto Play.
+
+### v0.38.1 — Auto Play Audio UI & Menu Instructions
+- **Audio Cues:** Built a dedicated `playAutoPlayUI()` synthesizer within `autoplay.js` to generate distinct, non-speech audio cues for opening menus, closing menus, navigating, changing values, playing, pausing, stopping, and natural chapter completion.
+- **Menu Accessibility:** Updated the Auto Play menu to immediately announce navigational instructions ("Use Up/Down to navigate, Left/Right to change") and prepended step indicators (e.g., "1 of 4") to all options to orient non-visual users.
+
+### v0.38.2 — Auto Play UX & Range Settings
+- **Audio Cues:** Increased the gain and adjusted waveforms for menu `open`, `close`, and `nav` sounds to make them punchier and more pronounced over screen reader speech.
+- **Menu Accessibility:** Updated the `A` key activation to inject a verbose ARIA instruction string detailing exact navigation keys. Clarified voice numbering to separate the menu item step from the total available voices.
+- **Playback Range:** Introduced a new "Range" parameter to the Auto Play menu, allowing users to cap continuous playback to the "End of Chapter", "Next 5 Verses", or "Next 10 Verses".
