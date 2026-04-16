@@ -109,17 +109,6 @@ function getAutoPlayMenuString(index) {
     return options[index];
 }
 
-function parseOmniJumps(text) {
-    const links = [...new Set([...text.matchAll(/\[\[(.*?)\]\]/g)].map(m => m[0]))];
-    if (links.length === 0) return;
-    const count = links.length;
-    playTone(900, 'sine', 0.05, 0.15);
-    setTimeout(() => playTone(1200, 'sine', 0.05, 0.15), 80);
-    speak(count === 1
-        ? "1 jump link detected. Press Alt J to follow."
-        : count + " jump links detected. Press Alt J to select.");
-}
-
 export function handleInput(event) {
     if (!isInitialized) {
         if (event.key === 'Enter') {
@@ -539,10 +528,8 @@ export function handleInput(event) {
         req.onsuccess = () => {
             if (req.result && req.result.content && req.result.content.trim() !== '') {
                 const rawText = req.result.content;
-                const spokenText = rawText.replace(/(?:jump to\s*)?\[\[(.*?)\]\]/gi, "Jump to $1");
-                speak("Note: " + spokenText);
+                speak(rawText);
                 updateVisualBuffer("PERSONAL NOTE", rawText);
-                parseOmniJumps(rawText);
             } else {
                 speak("No personal note.");
                 updateVisualBuffer("PERSONAL NOTE", "No personal note.");
@@ -717,10 +704,8 @@ export function handleInput(event) {
                 req.onsuccess = () => {
                     if (req.result && req.result.content && req.result.content.trim() !== '') {
                         const rawText = req.result.content;
-                        const spokenText = rawText.replace(/(?:jump to\s*)?\[\[(.*?)\]\]/gi, "Jump to $1");
-                        speak("Commentary: " + spokenText);
+                        speak(rawText);
                         updateVisualBuffer("EXPERT COMMENTARY", rawText);
-                        parseOmniJumps(rawText);
                     } else {
                         speak("No commentary available.");
                         updateVisualBuffer("EXPERT COMMENTARY", "No commentary available.");
@@ -838,19 +823,22 @@ export function handleInput(event) {
             event.preventDefault();
             if (!db || !isReady) break;
             {
-                const currentVerseId = memoryCache[currentVerseIndex].id;
+                const curVerse = memoryCache[currentVerseIndex];
+                const currentVerseId = curVerse.id;
+                const curriculumId = (curVerse.book_number * 1000000) + (curVerse.chapter * 1000) + curVerse.verse;
                 const tx = db.transaction([NOTES_STORE, COMMENTARY_STORE], "readonly");
-                let combinedContent = "";
+                let noteLinks = [];
+                let commLinks = [];
                 let pending = 2;
 
                 const processLinks = () => {
                     pending--;
                     if (pending > 0) return;
-                    const links = [...new Set([...combinedContent.matchAll(/\[\[(.*?)\]\]/g)].map(m => m[0]))];
+                    const allLinks = [...new Set([...noteLinks, ...commLinks])];
 
-                    if (links.length === 0) { speak("No links found."); return; }
-                    if (links.length === 1) {
-                        const target = parseLinkTarget(links[0]);
+                    if (allLinks.length === 0) { speak("No links found."); return; }
+                    if (allLinks.length === 1) {
+                        const target = parseLinkTarget(allLinks[0]);
                         if (!target) { speak("Invalid link target."); return; }
                         navigationHistory.push(currentVerseIndex);
                         jumpTo(target.book, target.chapter, target.verse);
@@ -858,17 +846,25 @@ export function handleInput(event) {
                     }
                     clearAllModes();
                     isOptionsMenuMode = true;
-                    menuOptions = links;
+                    menuOptions = allLinks;
                     currentMenuIndex = 0;
                     currentMenuTitle = "OMNI-JUMP MENU";
                     updateVisualBuffer(currentMenuTitle, menuOptions[0]);
-                    speak("Omni-Jump. " + links.length + " links found. 1 of " + links.length + ": " + menuOptions[0] + ". Use arrows to select.");
+                    speak("Omni-Jump. " + allLinks.length + " links found. 1 of " + allLinks.length + ": " + menuOptions[0] + ". Use arrows to select.");
                 };
 
                 const noteReq = tx.objectStore(NOTES_STORE).get(currentVerseId);
-                noteReq.onsuccess = () => { combinedContent += (noteReq.result?.content || '') + " "; processLinks(); };
-                const commReq = tx.objectStore(COMMENTARY_STORE).get(currentVerseId);
-                commReq.onsuccess = () => { combinedContent += (commReq.result?.content || '') + " "; processLinks(); };
+                noteReq.onsuccess = () => {
+                    const content = noteReq.result?.content || '';
+                    noteLinks = [...new Set([...content.matchAll(/\[\[(.*?)\]\]/g)].map(m => m[0]))];
+                    processLinks();
+                };
+                const commReq = tx.objectStore(COMMENTARY_STORE).get(curriculumId);
+                commReq.onsuccess = () => {
+                    const content = commReq.result?.content || '';
+                    commLinks = [...new Set([...content.matchAll(/\[\[(.*?)\]\]/g)].map(m => m[0]))];
+                    processLinks();
+                };
             }
             break;
         case 'F':
