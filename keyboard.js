@@ -244,19 +244,10 @@ export function handleInput(event) {
     }
 
     // 3. Scoped Scroll Lock (Only triggers if NO menus are active)
-    const buffer = document.getElementById('visual-buffer');
-    const isBufferOpen = buffer && (buffer.style.display === 'flex' || buffer.style.display === 'block');
     const isMenuMode = (typeof isHelpMenuMode !== 'undefined' && isHelpMenuMode) ||
                        (typeof isAutoPlayMenuMode !== 'undefined' && isAutoPlayMenuMode) ||
                        (typeof isOptionsMenuMode !== 'undefined' && isOptionsMenuMode) ||
                        (typeof isLibraryMode !== 'undefined' && isLibraryMode);
-
-    if (isBufferOpen && !isMenuMode && (key === 'ArrowUp' || key === 'ArrowDown')) {
-        if (key === 'ArrowUp') buffer.scrollTop -= 60;
-        if (key === 'ArrowDown') buffer.scrollTop += 60;
-        event.preventDefault();
-        return;
-    }
 
     if (isHelpMenuMode) {
         event.preventDefault();
@@ -591,6 +582,7 @@ export function handleInput(event) {
     if (key === 'PageDown' || key === 'PageUp') {
         event.preventDefault();
         if (!isReady) return;
+        clearVisualBuffer();
         const cur = memoryCache[currentVerseIndex];
         if (event.shiftKey) {
             // Shift+Page: book-level jump
@@ -712,6 +704,7 @@ export function handleInput(event) {
         case 'ARROWRIGHT':
             if (currentVerseIndex < memoryCache.length - 1) {
                 updateVerseIndex(currentVerseIndex + 1);
+                clearVisualBuffer();
                 readCurrentVerse();
             } else {
                 speak("End of library.");
@@ -720,6 +713,7 @@ export function handleInput(event) {
         case 'ARROWLEFT':
             if (currentVerseIndex > 0) {
                 updateVerseIndex(currentVerseIndex - 1);
+                clearVisualBuffer();
                 readCurrentVerse();
             } else {
                 speak("Beginning of library.");
