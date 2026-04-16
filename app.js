@@ -781,6 +781,28 @@ window.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('keydown', handleInput);
 });
 
+export async function fetchAndLoadCommentary(filename) {
+    try {
+        speak("Downloading...");
+        const response = await fetch('./commentaries/' + filename);
+        if (!response.ok) throw new Error("Network error");
+        const parsed = await response.json();
+
+        const tx = db.transaction([COMMENTARY_STORE], "readwrite");
+        const store = tx.objectStore(COMMENTARY_STORE);
+        store.clear().onsuccess = () => {
+            parsed.forEach(note => store.put(note));
+        };
+        tx.oncomplete = () => {
+            speak("Commentary loaded.");
+            silentVisualUpdate(currentVerseIndex);
+        };
+    } catch (error) {
+        console.error("Fetch error:", error);
+        speak("Failed to load commentary file.");
+    }
+}
+
 window.addEventListener('beforeunload', () => {
     if (isInitialized) localStorage.setItem('lastSpotIndex', currentVerseIndex);
 });

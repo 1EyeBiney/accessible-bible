@@ -1,4 +1,5 @@
 import { speak } from './ui.js';
+import { fetchAndLoadCommentary } from './app.js';
 import {
     currentVerseIndex, currentBookName, isReady, isInitialized,
     updateVerseIndex, updateBookName, setIsReady, toggleWelcomeMode, toggleTutorialMode,
@@ -57,6 +58,9 @@ export let isSearchMode = false;
 export let isNoteMode = false;
 export let isOptionsMenuMode = false;
 export let isAutoPlayMenuMode = false;
+export let isLibraryMode = false;
+export let libraryManifest = [];
+export let currentLibraryIndex = 0;
 export let currentMenuTitle = "";
 export let isKeyboardExplorer = false;
 export let isHelpMode = false;
@@ -70,6 +74,7 @@ export let currentMenuIndex = 0;
 export function clearAllModes() {
     isBookSearchMode = false; isChapterMode = false; isVerseMode = false;
     isSearchMode = false; isNoteMode = false; isOptionsMenuMode = false; isAutoPlayMenuMode = false;
+    isLibraryMode = false;
     isHelpMode = false; isHelpMenuMode = false; isKeyboardExplorer = false;
     currentMenuTitle = "";
     inputBuffer = ''; lastSearchLetter = '';
@@ -348,6 +353,42 @@ export function handleInput(event) {
         return;
     }
 
+    if (isLibraryMode) {
+        event.preventDefault();
+
+        if (key === 'Escape') {
+            clearAllModes();
+            speak("Library closed.");
+            return;
+        }
+
+        if (key === 'ArrowDown') {
+            currentLibraryIndex = (currentLibraryIndex + 1) % libraryManifest.length;
+            const item = libraryManifest[currentLibraryIndex];
+            const announcement = (currentLibraryIndex + 1) + " of " + libraryManifest.length + ": " + item.title + ". " + item.description;
+            updateVisualBuffer("COMMENTARY LIBRARY", announcement);
+            speak(announcement);
+            return;
+        }
+
+        if (key === 'ArrowUp') {
+            currentLibraryIndex = (currentLibraryIndex - 1 + libraryManifest.length) % libraryManifest.length;
+            const item = libraryManifest[currentLibraryIndex];
+            const announcement = (currentLibraryIndex + 1) + " of " + libraryManifest.length + ": " + item.title + ". " + item.description;
+            updateVisualBuffer("COMMENTARY LIBRARY", announcement);
+            speak(announcement);
+            return;
+        }
+
+        if (key === 'Enter') {
+            fetchAndLoadCommentary(libraryManifest[currentLibraryIndex].filename);
+            clearAllModes();
+            return;
+        }
+
+        return;
+    }
+
     if (isOptionsMenuMode) {
         event.preventDefault();
 
@@ -427,11 +468,6 @@ export function handleInput(event) {
                 return;
             }
             if (selected === 'Import Personal Notes') { importFileEl.click(); isOptionsMenuMode = false; return; }
-            if (selected === 'Import Commentary') { importCommentaryEl.click(); isOptionsMenuMode = false; return; }
-            if (selected === 'Clear Commentary') {
-                db.transaction([COMMENTARY_STORE], "readwrite").objectStore(COMMENTARY_STORE).clear();
-                isOptionsMenuMode = false; speak("Commentary cleared."); return;
-            }
 
             // Omni-Jump Selection Link Handling
             if (/^\[\[.*\]\]$/.test(selected)) {
@@ -748,11 +784,11 @@ export function handleInput(event) {
             if (!isReady) break;
             clearAllModes();
             isOptionsMenuMode = true;
-            menuOptions = ['Export Personal Notes', 'Import Personal Notes', 'Import Commentary', 'Clear Commentary', 'Boot Location: ' + bootPreference];
+            menuOptions = ['Export Personal Notes', 'Import Personal Notes', 'Boot Location: ' + bootPreference];
             currentMenuIndex = 0;
             currentMenuTitle = "OPTIONS MENU";
             updateVisualBuffer(currentMenuTitle, menuOptions[0]);
-            speak("Options Menu. 1 of 5: Export Personal Notes. Up and down arrows to navigate, Enter to select, Escape to close.");
+            speak("Options Menu. 1 of 3: Export Personal Notes. Up and down arrows to navigate, Enter to select, Escape to close.");
             break;
         case 'A':
             event.preventDefault();
@@ -793,8 +829,25 @@ export function handleInput(event) {
             break;
         }
         case 'L':
-            if (!event.altKey) break;
             event.preventDefault();
+            if (!event.altKey) {
+                // Bare L: Open Commentary Library
+                fetch('./commentaries/manifest.json')
+                    .then(res => { if (!res.ok) throw new Error('Network error'); return res.json(); })
+                    .then(data => {
+                        clearAllModes();
+                        libraryManifest = data;
+                        isLibraryMode = true;
+                        currentLibraryIndex = 0;
+                        const item = libraryManifest[0];
+                        const announcement = "Load Commentary. " + item.title + ". " + item.description;
+                        updateVisualBuffer("COMMENTARY LIBRARY", announcement);
+                        speak(announcement);
+                    })
+                    .catch(() => speak("Could not reach commentary library."));
+                break;
+            }
+            // Alt + L: Drop relational link
             if (!db || !isReady) break;
             if (anchoredVerseIndex < 0) {
                 speak("No anchor set.");
