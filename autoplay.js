@@ -192,13 +192,13 @@ function queueRemainingVerses(startIndex) {
 
         let prefix = "";
         if (i === startIndex) {
-            prefix = `${verseObj.book_name} Chapter ${verseObj.chapter}. `;
+            prefix = `${verseObj.book_name} Chapter ${verseObj.chapter}, verse ${verseObj.verse}. `;
         } else {
             const prevVerse = memoryCache[i - 1];
             if (verseObj.book_name !== prevVerse.book_name) {
-                prefix = `${verseObj.book_name} Chapter ${verseObj.chapter}. `;
+                prefix = `${verseObj.book_name} Chapter ${verseObj.chapter}, verse ${verseObj.verse}. `;
             } else if (verseObj.chapter !== prevVerse.chapter) {
-                prefix = `Chapter ${verseObj.chapter}. `;
+                prefix = `Chapter ${verseObj.chapter}, verse ${verseObj.verse}. `;
             } else if (autoPlaySettings.transition === 1) {
                 prefix = `${verseObj.verse}. `;
             } else if (autoPlaySettings.transition === 0) {
@@ -244,6 +244,11 @@ export function stopAutoPlay(autoEnd = false) {
     window.speechSynthesis.cancel();
     activeUtterances = [];
 
+    // Capture the true stopping location BEFORE moving the cursor
+    const finalVerseIndex = currentVerseIndex;
+    const finalVerse = memoryCache[finalVerseIndex];
+    const startVerse = memoryCache[startingVerseIndex];
+
     if (autoPlaySettings.postFocus === 1) {
         silentVisualUpdate(startingVerseIndex);
     }
@@ -251,8 +256,6 @@ export function stopAutoPlay(autoEnd = false) {
     // Orientation TTS Ticket
     const targetIndex = autoPlaySettings.postFocus === 1 ? startingVerseIndex : currentVerseIndex;
     const targetVerse = memoryCache[targetIndex];
-    const startVerse = memoryCache[startingVerseIndex];
-    const finalVerse = memoryCache[currentVerseIndex];
 
     let msg = `Verse ${targetVerse.verse}`;
     if (finalVerse.book_name !== startVerse.book_name) {
