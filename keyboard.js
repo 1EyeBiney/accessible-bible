@@ -480,19 +480,30 @@ export function handleInput(event) {
 
     // --- Vertical Readout (Teacher & Student) ---
     if (key === 'ArrowUp') {
+        const buffer = document.getElementById('visual-buffer');
+        if (buffer.style.display === 'flex' || buffer.style.display === 'block') {
+            if (key === 'ArrowDown') buffer.scrollTop += 60;
+            if (key === 'ArrowUp') buffer.scrollTop -= 60;
+            event.preventDefault();
+            return;
+        }
         event.preventDefault();
         if (!isReady || !db) return;
         const curVerse = memoryCache[currentVerseIndex];
+        const isShift = event.shiftKey;
 
-        if (event.shiftKey) {
+        if (isShift) {
             const curriculumId = (curVerse.book_number * 1000000) + (curVerse.chapter * 1000) + curVerse.verse;
             const tx = db.transaction([COMMENTARY_STORE], "readonly");
             const req = tx.objectStore(COMMENTARY_STORE).get(curriculumId);
             req.onsuccess = () => {
                 if (req.result && req.result.content && req.result.content.trim() !== '') {
-                    speak("Commentary: " + req.result.content);
+                    const textContent = req.result.content;
+                    speak("Commentary: " + textContent);
+                    updateVisualBuffer(isShift ? "EXPERT COMMENTARY" : "PERSONAL NOTE", textContent);
                 } else {
                     speak("No commentary available.");
+                    updateVisualBuffer(isShift ? "EXPERT COMMENTARY" : "PERSONAL NOTE", "No commentary available.");
                 }
             };
         } else {
@@ -500,9 +511,12 @@ export function handleInput(event) {
             const req = tx.objectStore(NOTES_STORE).get(curVerse.id);
             req.onsuccess = () => {
                 if (req.result && req.result.content && req.result.content.trim() !== '') {
-                    speak("Note: " + req.result.content);
+                    const textContent = req.result.content;
+                    speak("Note: " + textContent);
+                    updateVisualBuffer(isShift ? "EXPERT COMMENTARY" : "PERSONAL NOTE", textContent);
                 } else {
                     speak("No personal note.");
+                    updateVisualBuffer(isShift ? "EXPERT COMMENTARY" : "PERSONAL NOTE", "No personal note.");
                 }
             };
         }
@@ -510,6 +524,13 @@ export function handleInput(event) {
     }
 
     if (key === 'ArrowDown') {
+        const buffer = document.getElementById('visual-buffer');
+        if (buffer.style.display === 'flex' || buffer.style.display === 'block') {
+            if (key === 'ArrowDown') buffer.scrollTop += 60;
+            if (key === 'ArrowUp') buffer.scrollTop -= 60;
+            event.preventDefault();
+            return;
+        }
         event.preventDefault();
         clearAllModes();
         isMenuMode = true;

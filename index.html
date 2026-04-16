@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Accessible Bible v38</title>
+    <title>Accessible Bible v39</title>
     <style>
         /* A utility class to visually hide text while keeping it accessible to screen readers */
         .sr-only {
@@ -54,6 +54,16 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.55; }
         }
+        #visual-buffer {
+            max-height: 70vh;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+            padding-bottom: 20px;
+            border: 3px solid var(--accent-color);
+        }
+        /* Ensure the scrollbar matches the theme */
+        #visual-buffer::-webkit-scrollbar { width: 10px; }
+        #visual-buffer::-webkit-scrollbar-thumb { background: var(--accent-color); }
     </style>
 </head>
 <body>
