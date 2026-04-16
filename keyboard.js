@@ -832,7 +832,7 @@ export function handleInput(event) {
             event.preventDefault();
             if (!event.altKey) {
                 // Bare L: Open Commentary Library
-                fetch('./commentaries/manifest.json')
+                fetch('./commentaries/manifest.json', { cache: 'no-store' })
                     .then(res => { if (!res.ok) throw new Error('Network error'); return res.json(); })
                     .then(data => {
                         clearAllModes();

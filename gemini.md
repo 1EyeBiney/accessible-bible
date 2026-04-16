@@ -208,6 +208,9 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 - **Textarea Mirroring:** Wired the hidden note-taking `<textarea>` (activated by the `M` key) to the `#visual-buffer` using an `input` event listener. This provides sighted helpers with a real-time, large-text view of the note as it is being typed.
 - **Dynamic Auto-Scrolling:** Integrated a `scrollHeight` tracker into the input listener. If a user types a note that exceeds the `70vh` max-height established in v0.39.0, the buffer will automatically scroll to the bottom to keep the active text visible.
 - **Lifecycle Management:** Ensured the visual buffer initializes with existing note text when opening Memo mode and clears cleanly when pressing `Escape` to save.
+### v0.50.1 — Manifest Cache Buster
+- **`L` Key (`keyboard.js`):** Added `{ cache: 'no-store' }` to the `manifest.json` fetch, forcing the browser to bypass its HTTP cache and always retrieve the freshest manifest on every library open.
+
 ### v0.50.0 — Library Fetcher Engine & Interface
 - **`fetchAndLoadCommentary(filename)` (`app.js`):** New exported async function that fetches a commentary JSON file directly from the `./commentaries/` directory, bypasses the file-picker workflow entirely, and loads it into `COMMENTARY_STORE` using the same bulldoze-then-insert pattern established in v0.48.0. Announces "Downloading..." on initiation, "Commentary loaded." on success, and "Failed to load commentary file." on any network or parse error.
 - **Library Mode (`keyboard.js`):** Added `isLibraryMode`, `libraryManifest`, and `currentLibraryIndex` state variables. `clearAllModes()` now resets `isLibraryMode`. A new intercept block handles `ArrowUp`/`ArrowDown` to cycle the manifest with `"[N] of [Total]: [title]. [description]"` announcements, `Enter` to call `fetchAndLoadCommentary()` and exit the mode, and `Escape` to dismiss.
