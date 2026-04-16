@@ -92,8 +92,8 @@ function getAutoPlayMenuString(index) {
     const transitions = ["Chime", "Numbers", "Seamless"];
     const postFocus = ["Stay at stopped verse", "Return to start"];
     const units = ["Verses", "Chapters", "Books"];
-    const amountVals = [0, 1, 2, 3, 4, 5, 10, 15, 25, 50];
-    const amountLabels = ["End of Current", "1", "2", "3", "4", "5", "10", "15", "25", "50"];
+    const amountVals = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 50];
+    const amountLabels = ["End of Current", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "15", "20", "25", "50"];
     const voiceName = curatedVoices[autoPlaySettings.voiceIndex]?.display || "Loading...";
     const rateVal = autoPlaySettings.rate.toFixed(1) + "x";
 
@@ -285,7 +285,7 @@ export function handleInput(event) {
             } else if (currentMenuIndex === 4) {
                 autoPlaySettings.unit = (autoPlaySettings.unit + delta + 3) % 3;
             } else if (currentMenuIndex === 5) {
-                autoPlaySettings.amount = (autoPlaySettings.amount + delta + 10) % 10;
+                autoPlaySettings.amount = (autoPlaySettings.amount + delta + 15) % 15;
             }
 
             saveAutoPlaySettings();

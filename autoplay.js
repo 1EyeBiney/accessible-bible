@@ -156,7 +156,7 @@ function queueRemainingVerses(startIndex) {
 
     const startVerse = memoryCache[startIndex];
     let endIndex = memoryCache.length;
-    const amountVals = [0, 1, 2, 3, 4, 5, 10, 15, 25, 50];
+    const amountVals = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 50];
     const N = amountVals[autoPlaySettings.amount];
 
     if (autoPlaySettings.unit === 0) { // Verses
@@ -252,11 +252,12 @@ export function stopAutoPlay(autoEnd = false) {
     const targetIndex = autoPlaySettings.postFocus === 1 ? startingVerseIndex : currentVerseIndex;
     const targetVerse = memoryCache[targetIndex];
     const startVerse = memoryCache[startingVerseIndex];
+    const finalVerse = memoryCache[currentVerseIndex];
 
     let msg = `Verse ${targetVerse.verse}`;
-    if (targetVerse.book_name !== startVerse.book_name) {
+    if (finalVerse.book_name !== startVerse.book_name) {
         msg = `${targetVerse.book_name} Chapter ${targetVerse.chapter}, verse ${targetVerse.verse}`;
-    } else if (targetVerse.chapter !== startVerse.chapter) {
+    } else if (finalVerse.chapter !== startVerse.chapter) {
         msg = `Chapter ${targetVerse.chapter}, verse ${targetVerse.verse}`;
     }
 
