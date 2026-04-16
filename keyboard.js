@@ -109,6 +109,17 @@ function getAutoPlayMenuString(index) {
     return options[index];
 }
 
+function parseOmniJumps(text) {
+    const links = [...new Set([...text.matchAll(/\[\[(.*?)\]\]/g)].map(m => m[0]))];
+    if (links.length === 0) return;
+    const count = links.length;
+    playTone(900, 'sine', 0.05, 0.15);
+    setTimeout(() => playTone(1200, 'sine', 0.05, 0.15), 80);
+    speak(count === 1
+        ? "1 jump link detected. Press Alt J to follow."
+        : count + " jump links detected. Press Alt J to select.");
+}
+
 export function handleInput(event) {
     if (!isInitialized) {
         if (event.key === 'Enter') {
@@ -527,9 +538,11 @@ export function handleInput(event) {
         const req = tx.objectStore(NOTES_STORE).get(curVerse.id);
         req.onsuccess = () => {
             if (req.result && req.result.content && req.result.content.trim() !== '') {
-                const textContent = req.result.content;
-                speak("Note: " + textContent);
-                updateVisualBuffer("PERSONAL NOTE", textContent);
+                const rawText = req.result.content;
+                const spokenText = rawText.replace(/(?:jump to\s*)?\[\[(.*?)\]\]/gi, "Jump to $1");
+                speak("Note: " + spokenText);
+                updateVisualBuffer("PERSONAL NOTE", rawText);
+                parseOmniJumps(rawText);
             } else {
                 speak("No personal note.");
                 updateVisualBuffer("PERSONAL NOTE", "No personal note.");
@@ -703,9 +716,11 @@ export function handleInput(event) {
                 const req = tx.objectStore(COMMENTARY_STORE).get(curriculumId);
                 req.onsuccess = () => {
                     if (req.result && req.result.content && req.result.content.trim() !== '') {
-                        const textContent = req.result.content;
-                        speak("Commentary: " + textContent);
-                        updateVisualBuffer("EXPERT COMMENTARY", textContent);
+                        const rawText = req.result.content;
+                        const spokenText = rawText.replace(/(?:jump to\s*)?\[\[(.*?)\]\]/gi, "Jump to $1");
+                        speak("Commentary: " + spokenText);
+                        updateVisualBuffer("EXPERT COMMENTARY", rawText);
+                        parseOmniJumps(rawText);
                     } else {
                         speak("No commentary available.");
                         updateVisualBuffer("EXPERT COMMENTARY", "No commentary available.");
