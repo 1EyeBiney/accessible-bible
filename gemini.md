@@ -200,3 +200,11 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 - **Audio Cues:** Increased the gain and adjusted waveforms for menu `open`, `close`, and `nav` sounds to make them punchier and more pronounced over screen reader speech.
 - **Menu Accessibility:** Updated the `A` key activation to inject a verbose ARIA instruction string detailing exact navigation keys. Clarified voice numbering to separate the menu item step from the total available voices.
 - **Playback Range:** Introduced a new "Range" parameter to the Auto Play menu, allowing users to cap continuous playback to the "End of Chapter", "Next 5 Verses", or "Next 10 Verses".
+### v0.40.0 — Input Routing & Menu Restoration
+- **Greedy Intercept Fix:** Resolved a critical bug where the v0.39.0 CSS Scroll Lock hijacked all `ArrowUp` and `ArrowDown` inputs while the visual buffer was open. This previously broke vertical navigation for the Help (`?`), Auto Play (`A`), and Options (`O`) menus.
+- **State-Aware Scrolling:** The scroll intercept is now strictly scoped using an `isMenuMode` exclusion check in `keyboard.js`, ensuring it only fires when viewing static Personal Notes or Expert Commentary.
+- **Explorer Restoration:** Restored the `F12` Keyboard Explorer and `?` Help Menu triggers at the top of the input router that were accidentally overwritten during the previous merge block.
+### v0.42.0 — Real-Time Visual Echo for Memo Mode
+- **Textarea Mirroring:** Wired the hidden note-taking `<textarea>` (activated by the `M` key) to the `#visual-buffer` using an `input` event listener. This provides sighted helpers with a real-time, large-text view of the note as it is being typed.
+- **Dynamic Auto-Scrolling:** Integrated a `scrollHeight` tracker into the input listener. If a user types a note that exceeds the `70vh` max-height established in v0.39.0, the buffer will automatically scroll to the bottom to keep the active text visible.
+- **Lifecycle Management:** Ensured the visual buffer initializes with existing note text when opening Memo mode and clears cleanly when pressing `Escape` to save.

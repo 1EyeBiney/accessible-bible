@@ -11,7 +11,7 @@ import {
     audioCtx, audioA, audioB, activeAudio, currentVolumeIndex, crossfadeTimer
 } from './audio.js';
 import { db, memoryCache, bookmarksCache, initDatabase, loadBookmarks, loadToMemory, setMemoryCache } from './db.js';
-import { handleInput, clearAllModes, setSearchMode, setNoteMode, getSearchMode, getNoteMode, setSearchResults, setCurrentSearchResultIndex, updateSearchVisualBuffer, clearVisualBuffer } from './keyboard.js';
+import { handleInput, clearAllModes, setSearchMode, setNoteMode, getSearchMode, getNoteMode, setSearchResults, setCurrentSearchResultIndex, updateSearchVisualBuffer, clearVisualBuffer, updateVisualBuffer } from './keyboard.js';
 
 export { memoryCache };
 
@@ -323,9 +323,11 @@ export function openNoteEditorForCurrentVerse() {
     noteRequest.onsuccess = () => {
         if (noteRequest.result) {
             noteEditorEl.value = noteRequest.result.content;
+            updateVisualBuffer("EDITING NOTE", noteRequest.result.content);
             speak("Edit note: " + noteRequest.result.content);
         } else {
             noteEditorEl.value = '';
+            updateVisualBuffer("EDITING NOTE", "Type your note...");
             speak(
                 "New note for " + activeVerse.book_name + " " + activeVerse.chapter +
                 " verse " + activeVerse.verse + ". Type and press Escape to save."
@@ -642,6 +644,12 @@ window.addEventListener('DOMContentLoaded', () => {
         updateSearchVisualBuffer(searchInput.value.trim());
     });
 
+    noteEditor.addEventListener('input', (event) => {
+        updateVisualBuffer("EDITING NOTE", event.target.value);
+        const buffer = document.getElementById('visual-buffer');
+        if (buffer) buffer.scrollTop = buffer.scrollHeight;
+    });
+
     noteEditor.addEventListener('keydown', (event) => {
         event.stopPropagation();
 
@@ -709,6 +717,7 @@ window.addEventListener('DOMContentLoaded', () => {
             });
 
             setNoteMode(false);
+            clearVisualBuffer();
             focusTrap.focus();
             speak("Note saved.");
         }

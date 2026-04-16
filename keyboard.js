@@ -23,7 +23,7 @@ import { helpMenuData, NOTES_STORE, COMMENTARY_STORE, THEMES, muteTutorialPrompt
 
 const visualBuffer = document.getElementById('visual-buffer');
 
-function updateVisualBuffer(modeText, valueText) {
+export function updateVisualBuffer(modeText, valueText) {
     if (!visualBuffer) return;
     if (!modeText) {
         visualBuffer.style.display = 'none';
@@ -55,11 +55,12 @@ export let isChapterMode = false;
 export let isVerseMode = false;
 export let isSearchMode = false;
 export let isNoteMode = false;
-export let isMenuMode = false;
+export let isOptionsMenuMode = false;
 export let isAutoPlayMenuMode = false;
 export let currentMenuTitle = "";
 export let isKeyboardExplorer = false;
 export let isHelpMode = false;
+export let isHelpMenuMode = false;
 export let searchResults = [];
 export let currentSearchResultIndex = -1;
 export let consecutiveSearchJumps = 0;
@@ -68,8 +69,8 @@ export let currentMenuIndex = 0;
 
 export function clearAllModes() {
     isBookSearchMode = false; isChapterMode = false; isVerseMode = false;
-    isSearchMode = false; isNoteMode = false; isMenuMode = false; isAutoPlayMenuMode = false;
-    isHelpMode = false; isKeyboardExplorer = false;
+    isSearchMode = false; isNoteMode = false; isOptionsMenuMode = false; isAutoPlayMenuMode = false;
+    isHelpMode = false; isHelpMenuMode = false; isKeyboardExplorer = false;
     currentMenuTitle = "";
     inputBuffer = ''; lastSearchLetter = '';
     lastBookSearchKey = '';
@@ -199,46 +200,84 @@ export function handleInput(event) {
     }
 
     const keyUpper = key.toUpperCase();
+    const isShift = event.shiftKey;
 
     if (isAutoPlaying && !['A', 'P', 'S', 'SHIFT', 'CONTROL', 'ALT'].includes(keyUpper) && !isAutoPlayMenuMode) {
         playAutoPlayUI('stop');
         stopAutoPlay();
     }
 
-    if (isKeyboardExplorer) {
-        event.preventDefault();
-        if (event.key === 'Escape' || event.key === 'F12') {
+    // 1. Keyboard Explorer Mode (Highest Priority)
+    if (typeof isKeyboardExplorer !== 'undefined' && isKeyboardExplorer) {
+        if (key === 'F12' || key === 'Escape') {
             isKeyboardExplorer = false;
-            speak("Exiting Keyboard Explorer.");
-        } else {
-            speak(getKeyboardExplorerDescription(event));
+            speak("Keyboard Explorer disabled.");
+            clearVisualBuffer();
+            return;
         }
+        event.preventDefault();
+        speak(getKeyboardExplorerDescription(event));
         return;
     }
 
-    if (isHelpMode) {
+    // 2. Mode Toggles (F12 and ?)
+    if (key === 'F12') {
+        isKeyboardExplorer = true;
+        speak("Keyboard Explorer enabled. Press F12 or Escape to exit.");
+        updateVisualBuffer("KEYBOARD EXPLORER", "Press any key to hear its function.");
         event.preventDefault();
-        if (event.key === 'Escape') {
-            isHelpMode = false;
-            currentHelpIndex = 0;
+        return;
+    }
+
+    if (key === '?') {
+        isHelpMenuMode = true;
+        currentMenuIndex = 0;
+        updateVisualBuffer("HELP MENU", helpMenuData[currentMenuIndex]);
+        speak(helpMenuData[currentMenuIndex]);
+        event.preventDefault();
+        return;
+    }
+
+    // 3. Scoped Scroll Lock (Only triggers if NO menus are active)
+    const buffer = document.getElementById('visual-buffer');
+    const isBufferOpen = buffer && (buffer.style.display === 'flex' || buffer.style.display === 'block');
+    const isMenuMode = (typeof isHelpMenuMode !== 'undefined' && isHelpMenuMode) ||
+                       (typeof isAutoPlayMenuMode !== 'undefined' && isAutoPlayMenuMode) ||
+                       (typeof isOptionsMenuMode !== 'undefined' && isOptionsMenuMode);
+
+    if (isBufferOpen && !isMenuMode && (key === 'ArrowUp' || key === 'ArrowDown')) {
+        if (key === 'ArrowUp') buffer.scrollTop -= 60;
+        if (key === 'ArrowDown') buffer.scrollTop += 60;
+        event.preventDefault();
+        return;
+    }
+
+    if (isHelpMenuMode) {
+        event.preventDefault();
+        if (key === 'Escape') {
+            isHelpMenuMode = false;
+            currentMenuIndex = 0;
             speak("Help menu closed.");
+            clearVisualBuffer();
             return;
         }
-        if (event.key === 'ArrowDown') {
-            currentHelpIndex = (currentHelpIndex + 1) % helpMenuData.length;
-            updateVisualBuffer("HELP MENU", helpMenuData[currentHelpIndex]);
-            speak(helpMenuData[currentHelpIndex]);
+        if (key === 'ArrowDown') {
+            currentMenuIndex = (currentMenuIndex + 1) % helpMenuData.length;
+            updateVisualBuffer("HELP MENU", helpMenuData[currentMenuIndex]);
+            speak(helpMenuData[currentMenuIndex]);
             return;
         }
-        if (event.key === 'ArrowUp') {
-            currentHelpIndex = (currentHelpIndex - 1 + helpMenuData.length) % helpMenuData.length;
-            updateVisualBuffer("HELP MENU", helpMenuData[currentHelpIndex]);
-            speak(helpMenuData[currentHelpIndex]);
+        if (key === 'ArrowUp') {
+            currentMenuIndex = (currentMenuIndex - 1 + helpMenuData.length) % helpMenuData.length;
+            updateVisualBuffer("HELP MENU", helpMenuData[currentMenuIndex]);
+            speak(helpMenuData[currentMenuIndex]);
             return;
         }
         speak("Help menu active. Use up and down arrows to navigate. Escape closes help.");
         return;
     }
+
+    // ... standard navigation logic continues below ...
 
     if (isAutoPlayMenuMode) {
         event.preventDefault();
@@ -309,7 +348,7 @@ export function handleInput(event) {
         return;
     }
 
-    if (isMenuMode) {
+    if (isOptionsMenuMode) {
         event.preventDefault();
 
         if (key === 'Escape') {
@@ -360,7 +399,7 @@ export function handleInput(event) {
                 const deleteTx = db.transaction([NOTES_STORE], "readwrite");
                 const deleteStore = deleteTx.objectStore(NOTES_STORE);
                 deleteStore.delete(memoryCache[currentVerseIndex].id);
-                isMenuMode = false;
+                isOptionsMenuMode = false;
                 speak("Note deleted.");
                 return;
             }
@@ -368,7 +407,7 @@ export function handleInput(event) {
             if (selected === 'Copy Verse') {
                 const v = memoryCache[currentVerseIndex];
                 const fullText = v.book_name + " " + v.chapter + ":" + v.verse + " - " + v.text;
-                isMenuMode = false;
+                isOptionsMenuMode = false;
                 copyToClipboard(fullText);
                 return;
             }
@@ -383,15 +422,15 @@ export function handleInput(event) {
                     const anchor = document.createElement('a');
                     anchor.href = url; anchor.download = 'bible_notes_backup.json';
                     document.body.appendChild(anchor); anchor.click(); document.body.removeChild(anchor); URL.revokeObjectURL(url);
-                    isMenuMode = false; speak("Notes exported.");
+                    isOptionsMenuMode = false; speak("Notes exported.");
                 };
                 return;
             }
-            if (selected === 'Import Personal Notes') { importFileEl.click(); isMenuMode = false; return; }
-            if (selected === 'Import Commentary') { importCommentaryEl.click(); isMenuMode = false; return; }
+            if (selected === 'Import Personal Notes') { importFileEl.click(); isOptionsMenuMode = false; return; }
+            if (selected === 'Import Commentary') { importCommentaryEl.click(); isOptionsMenuMode = false; return; }
             if (selected === 'Clear Commentary') {
                 db.transaction([COMMENTARY_STORE], "readwrite").objectStore(COMMENTARY_STORE).clear();
-                isMenuMode = false; speak("Commentary cleared."); return;
+                isOptionsMenuMode = false; speak("Commentary cleared."); return;
             }
 
             // Omni-Jump Selection Link Handling
@@ -402,7 +441,7 @@ export function handleInput(event) {
                     return;
                 }
                 navigationHistory.push(currentVerseIndex);
-                isMenuMode = false;
+                isOptionsMenuMode = false;
                 jumpTo(target.book, target.chapter, target.verse);
                 return;
             }
@@ -480,17 +519,9 @@ export function handleInput(event) {
 
     // --- Vertical Readout (Teacher & Student) ---
     if (key === 'ArrowUp') {
-        const buffer = document.getElementById('visual-buffer');
-        if (buffer.style.display === 'flex' || buffer.style.display === 'block') {
-            if (key === 'ArrowDown') buffer.scrollTop += 60;
-            if (key === 'ArrowUp') buffer.scrollTop -= 60;
-            event.preventDefault();
-            return;
-        }
         event.preventDefault();
         if (!isReady || !db) return;
         const curVerse = memoryCache[currentVerseIndex];
-        const isShift = event.shiftKey;
 
         if (isShift) {
             const curriculumId = (curVerse.book_number * 1000000) + (curVerse.chapter * 1000) + curVerse.verse;
@@ -524,16 +555,9 @@ export function handleInput(event) {
     }
 
     if (key === 'ArrowDown') {
-        const buffer = document.getElementById('visual-buffer');
-        if (buffer.style.display === 'flex' || buffer.style.display === 'block') {
-            if (key === 'ArrowDown') buffer.scrollTop += 60;
-            if (key === 'ArrowUp') buffer.scrollTop -= 60;
-            event.preventDefault();
-            return;
-        }
         event.preventDefault();
         clearAllModes();
-        isMenuMode = true;
+        isOptionsMenuMode = true;
         menuOptions = ['Edit Note', 'Delete Note', 'Copy Verse'];
         currentMenuIndex = 0;
         currentMenuTitle = "VERSE MENU";
@@ -719,7 +743,7 @@ export function handleInput(event) {
             event.preventDefault();
             if (!isReady) break;
             clearAllModes();
-            isMenuMode = true;
+            isOptionsMenuMode = true;
             menuOptions = ['Export Personal Notes', 'Import Personal Notes', 'Import Commentary', 'Clear Commentary', 'Boot Location: ' + bootPreference];
             currentMenuIndex = 0;
             currentMenuTitle = "OPTIONS MENU";
@@ -814,7 +838,7 @@ export function handleInput(event) {
                         return;
                     }
                     clearAllModes();
-                    isMenuMode = true;
+                    isOptionsMenuMode = true;
                     menuOptions = links;
                     currentMenuIndex = 0;
                     currentMenuTitle = "OMNI-JUMP MENU";

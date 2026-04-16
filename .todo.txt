@@ -1,3 +1,7 @@
+double badges sizes
+font size to 14 in bottom 2 rows with commands
+question mark and F12 are not working
+Can't visibly see what typing in F, search box
 Mac enter key
 search box need to go away after enter
 visual reference for R
