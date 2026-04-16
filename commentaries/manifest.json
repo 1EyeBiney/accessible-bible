@@ -1,6 +1,6 @@
 [
   {
-    "title": "Evangelism Explosion v5",
+    "title": "Evangelism Explosion v6",
     "filename": "Evangelism_Explosion_Commentary_v6.json",
     "description": "A 12-step guided presentation of the Gospel message."
   },
@@ -8,5 +8,10 @@
     "title": "Augustine Collection",
     "filename": "Augustine_and_Theodoret_commentary.json",
     "description": "Selected historical writings and theological notes."
+  },
+  {
+    "title": "Chrysostom Collection",
+    "filename": "chrysostom_commentary.json",
+    "description": "Selected homilies and exegetical notes from John Chrysostom."
   }
 ]
