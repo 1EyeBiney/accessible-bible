@@ -248,7 +248,8 @@ export function handleInput(event) {
     const isBufferOpen = buffer && (buffer.style.display === 'flex' || buffer.style.display === 'block');
     const isMenuMode = (typeof isHelpMenuMode !== 'undefined' && isHelpMenuMode) ||
                        (typeof isAutoPlayMenuMode !== 'undefined' && isAutoPlayMenuMode) ||
-                       (typeof isOptionsMenuMode !== 'undefined' && isOptionsMenuMode);
+                       (typeof isOptionsMenuMode !== 'undefined' && isOptionsMenuMode) ||
+                       (typeof isLibraryMode !== 'undefined' && isLibraryMode);
 
     if (isBufferOpen && !isMenuMode && (key === 'ArrowUp' || key === 'ArrowDown')) {
         if (key === 'ArrowUp') buffer.scrollTop -= 60;

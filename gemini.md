@@ -208,6 +208,9 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 - **Textarea Mirroring:** Wired the hidden note-taking `<textarea>` (activated by the `M` key) to the `#visual-buffer` using an `input` event listener. This provides sighted helpers with a real-time, large-text view of the note as it is being typed.
 - **Dynamic Auto-Scrolling:** Integrated a `scrollHeight` tracker into the input listener. If a user types a note that exceeds the `70vh` max-height established in v0.39.0, the buffer will automatically scroll to the bottom to keep the active text visible.
 - **Lifecycle Management:** Ensured the visual buffer initializes with existing note text when opening Memo mode and clears cleanly when pressing `Escape` to save.
+### v0.50.2 — Library Scroll Intercept Fix
+- **`isMenuMode` (`keyboard.js`):** Added `isLibraryMode` to the `isMenuMode` boolean guard that sits above the visual buffer scroll lock. Without this, `ArrowUp`/`ArrowDown` inputs while the Library menu was open were being eaten by the scroll intercept instead of reaching the library navigation handler.
+
 ### v0.50.1 — Manifest Cache Buster
 - **`L` Key (`keyboard.js`):** Added `{ cache: 'no-store' }` to the `manifest.json` fetch, forcing the browser to bypass its HTTP cache and always retrieve the freshest manifest on every library open.
 
