@@ -517,40 +517,24 @@ export function handleInput(event) {
         return;
     }
 
-    // --- Vertical Readout (Teacher & Student) ---
+    // --- Vertical Readout (Personal Note) ---
     if (key === 'ArrowUp') {
         event.preventDefault();
         if (!isReady || !db) return;
         const curVerse = memoryCache[currentVerseIndex];
 
-        if (isShift) {
-            const curriculumId = (curVerse.book_number * 1000000) + (curVerse.chapter * 1000) + curVerse.verse;
-            const tx = db.transaction([COMMENTARY_STORE], "readonly");
-            const req = tx.objectStore(COMMENTARY_STORE).get(curriculumId);
-            req.onsuccess = () => {
-                if (req.result && req.result.content && req.result.content.trim() !== '') {
-                    const textContent = req.result.content;
-                    speak("Commentary: " + textContent);
-                    updateVisualBuffer(isShift ? "EXPERT COMMENTARY" : "PERSONAL NOTE", textContent);
-                } else {
-                    speak("No commentary available.");
-                    updateVisualBuffer(isShift ? "EXPERT COMMENTARY" : "PERSONAL NOTE", "No commentary available.");
-                }
-            };
-        } else {
-            const tx = db.transaction([NOTES_STORE], "readonly");
-            const req = tx.objectStore(NOTES_STORE).get(curVerse.id);
-            req.onsuccess = () => {
-                if (req.result && req.result.content && req.result.content.trim() !== '') {
-                    const textContent = req.result.content;
-                    speak("Note: " + textContent);
-                    updateVisualBuffer(isShift ? "EXPERT COMMENTARY" : "PERSONAL NOTE", textContent);
-                } else {
-                    speak("No personal note.");
-                    updateVisualBuffer(isShift ? "EXPERT COMMENTARY" : "PERSONAL NOTE", "No personal note.");
-                }
-            };
-        }
+        const tx = db.transaction([NOTES_STORE], "readonly");
+        const req = tx.objectStore(NOTES_STORE).get(curVerse.id);
+        req.onsuccess = () => {
+            if (req.result && req.result.content && req.result.content.trim() !== '') {
+                const textContent = req.result.content;
+                speak("Note: " + textContent);
+                updateVisualBuffer("PERSONAL NOTE", textContent);
+            } else {
+                speak("No personal note.");
+                updateVisualBuffer("PERSONAL NOTE", "No personal note.");
+            }
+        };
         return;
     }
 
@@ -708,6 +692,26 @@ export function handleInput(event) {
             if (event.shiftKey) break;
             event.preventDefault();
             playNextTrack();
+            break;
+        case 'Y':
+            event.preventDefault();
+            if (!isReady || !db) break;
+            {
+                const curVerse = memoryCache[currentVerseIndex];
+                const curriculumId = (curVerse.book_number * 1000000) + (curVerse.chapter * 1000) + curVerse.verse;
+                const tx = db.transaction([COMMENTARY_STORE], "readonly");
+                const req = tx.objectStore(COMMENTARY_STORE).get(curriculumId);
+                req.onsuccess = () => {
+                    if (req.result && req.result.content && req.result.content.trim() !== '') {
+                        const textContent = req.result.content;
+                        speak("Commentary: " + textContent);
+                        updateVisualBuffer("EXPERT COMMENTARY", textContent);
+                    } else {
+                        speak("No commentary available.");
+                        updateVisualBuffer("EXPERT COMMENTARY", "No commentary available.");
+                    }
+                };
+            }
             break;
         case 'K':
             if (event.shiftKey) break;
