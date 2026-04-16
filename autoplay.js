@@ -38,9 +38,20 @@ export function initVoices() {
     curatedVoices = [];
     targetVoices.forEach(target => {
         const foundVoice = systemVoices.find(v => v.name.includes(target) && v.lang.startsWith('en'));
-        if (foundVoice) curatedVoices.push({ name: foundVoice.name, obj: foundVoice, installed: true, display: target });
-        else curatedVoices.push({ name: target, obj: null, installed: false, display: target + ' (Missing)' });
+        if (foundVoice) {
+            curatedVoices.push({ name: foundVoice.name, obj: foundVoice, installed: true, display: target });
+        }
     });
+
+    // If any voices are missing (e.g., in Chrome), append the Help option
+    if (curatedVoices.length < targetVoices.length) {
+        curatedVoices.push({ name: 'help', obj: null, installed: false, display: 'Missing Voices? [Press Enter]', isHelp: true });
+    }
+
+    // Safety check: if saved voice index is now out of bounds, reset it
+    if (autoPlaySettings.voiceIndex >= curatedVoices.length) {
+        autoPlaySettings.voiceIndex = 0;
+    }
 }
 if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = initVoices;
 
@@ -151,7 +162,8 @@ export function startAutoPlay() {
 }
 
 function queueRemainingVerses(startIndex) {
-    const selectedVoice = curatedVoices[autoPlaySettings.voiceIndex];
+    let selectedVoice = curatedVoices[autoPlaySettings.voiceIndex];
+    if (selectedVoice && selectedVoice.isHelp) selectedVoice = curatedVoices[0]; // Fallback if Play is hit on the Help item
     const targetVoice = selectedVoice && selectedVoice.installed ? selectedVoice.obj : null;
 
     const startVerse = memoryCache[startIndex];
@@ -264,7 +276,8 @@ export function stopAutoPlay(autoEnd = false) {
         msg = `Chapter ${targetVerse.chapter}, verse ${targetVerse.verse}`;
     }
 
-    const selectedVoice = curatedVoices[autoPlaySettings.voiceIndex];
+    let selectedVoice = curatedVoices[autoPlaySettings.voiceIndex];
+    if (selectedVoice && selectedVoice.isHelp) selectedVoice = curatedVoices[0];
     const utterance = new SpeechSynthesisUtterance(msg);
     if (selectedVoice && selectedVoice.installed) utterance.voice = selectedVoice.obj;
     utterance.rate = autoPlaySettings.rate;

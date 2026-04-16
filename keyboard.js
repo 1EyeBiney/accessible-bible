@@ -250,6 +250,16 @@ export function handleInput(event) {
             return;
         }
 
+        if (key === 'Enter') {
+            if (currentMenuIndex === 0 && curatedVoices[autoPlaySettings.voiceIndex]?.isHelp) {
+                playAutoPlayUI('open');
+                const docText = "For the highest quality, human-like Auto Play voices, Accessible Bible is best experienced in Microsoft Edge.";
+                updateVisualBuffer("VOICE DOCUMENTATION", docText);
+                speak(docText + " Press Escape to close the menu.");
+            }
+            return;
+        }
+
         if (key === 'ArrowDown') {
             currentMenuIndex = (currentMenuIndex + 1) % 6;
             playAutoPlayUI('nav');
