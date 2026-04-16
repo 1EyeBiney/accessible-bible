@@ -208,6 +208,10 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 - **Textarea Mirroring:** Wired the hidden note-taking `<textarea>` (activated by the `M` key) to the `#visual-buffer` using an `input` event listener. This provides sighted helpers with a real-time, large-text view of the note as it is being typed.
 - **Dynamic Auto-Scrolling:** Integrated a `scrollHeight` tracker into the input listener. If a user types a note that exceeds the `70vh` max-height established in v0.39.0, the buffer will automatically scroll to the bottom to keep the active text visible.
 - **Lifecycle Management:** Ensured the visual buffer initializes with existing note text when opening Memo mode and clears cleanly when pressing `Escape` to save.
+### v0.48.0 — DB Bulldozer & Audio Polish
+- **Commentary Bulldozer (`app.js`):** Refactored `importCommentaryEl` transaction logic to call `store.clear()` before inserting new records, ensuring stale entries from a prior module are fully purged before the new dataset lands. Also added a `silentVisualUpdate(currentVerseIndex)` call inside `tx.oncomplete` so the commentary alert badge refreshes immediately after the load without requiring the user to navigate away and back.
+- **Backspace Audio Fix (`keyboard.js`):** Merged the Backspace backtrack announcement into a single `readCurrentVerse()` call with a prefixed location string ("Returned to [Book] chapter [N], verse [N]"). The `playTone` cue fires simultaneously rather than as a separate trailing `speak()`, eliminating the double-announcement race condition.
+
 ### v0.43.0 — Screen-Reader Safe Commentary Key
 - **Modifier Key Decoupling:** Removed the `Shift + Up Arrow` binding for Expert Commentary, as the `Shift` modifier was being intercepted by screen readers (NVDA/JAWS/Narrator) as a native text-selection command, preventing the browser from receiving the event.
 - **Dedicated Commentary Key:** Mapped Expert Commentary to the `Y` key. `ArrowUp` now exclusively handles Personal Notes, while `Y` exclusively handles Instructor/Expert Commentary, ensuring 100% reliability across all screen readers without requiring Focus Mode or Forms Mode.

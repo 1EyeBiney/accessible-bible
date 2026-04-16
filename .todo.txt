@@ -1,9 +1,77 @@
 double badges sizes
 font size to 14 in bottom 2 rows with commands
-question mark and F12 are not working
 Can't visibly see what typing in F, search box
 Mac enter key
 search box need to go away after enter
 visual reference for R
 
 read note
+
+You said
+for this: The Solution: We can add a simple "Remote Load" field to your Options (O) menu. Instead of clicking "Import," the user can paste a link into a text box and press Enter., could we then have an array with pre-filled addresses and just have the user go through that list and pick the one they want and the URL would automatically be there?
+Expand
+Listen
+Gemini said
+That is a fantastic way to bridge the gap between "technical power" and "user simplicity." By combining a URL Paste field with a Curriculum Gallery (a pre-filled list of trusted links), you give your users the best of both worlds.
+Based on your current engine architecture, we can implement this as a v0.47.0 update. This would involve creating a "Curriculum Feed" system where the user simply cycles through your pre-approved study plans and presses Enter to instantly download and install them.
+How the "Curriculum Gallery" Would Work:
+• 
+The Manifest: We create a small, static file on your server (e.g., curriculum_list.json) that contains the names and URLs of all available plans (Evangelism Explosion, Roman Road, etc.).
+• 
+The Options UI: Inside the Options (O) menu, we add a new category called "Browse Study Plans."
+• 
+The Experience:
+1. 
+The user presses O.
+2. 
+They navigate to "Browse Study Plans" and press Enter.
+3. 
+They use Up/Down Arrows to hear the names of the plans (e.g., "Evangelism Explosion by Bill the Legend").
+4. 
+They press Enter on their choice.
+5. 
+The engine silently fetches the URL, clears the old commentary, and loads the new one.
+ 
+Step 1: The GCA Prompt (Curriculum Gallery Engine)
+This prompt will build the "Remote Fetch" logic and the "Pre-filled Gallery" into your Options menu.
+Plaintext
+Copy code
+Mission: Update Cycle v0.47.0 — Remote Curriculum Gallery
+
+Step 1: Open 'config.js'.
+1. Add a new constant array called 'STUDY_PLAN_GALLERY':
+   export const STUDY_PLAN_GALLERY = [
+       { name: "Evangelism Explosion", url: "https://your-server.com/ee_v4.json" },
+       { name: "The Roman Road", url: "https://your-server.com/roman_road.json" }
+   ];
+
+Step 2: Open 'app.js'.
+1. Create an async function called 'fetchRemoteCommentary(url)'.
+2. It should use 'fetch(url)', parse the JSON, and then call your existing commentary import logic (clearing the COMMENTARY_STORE first).
+3. Add a success/failure TTS announcement: "Study plan loaded successfully" or "Failed to reach server."
+
+Step 3: Open 'keyboard.js'.
+1. Locate the 'Options Menu' logic (case 'O').
+2. Add a new submenu state: 'isGalleryMode'.
+3. When 'Browse Study Plans' is selected in the Options menu, set 'isGalleryMode' to true.
+4. While in Gallery Mode:
+   - Up/Down arrows cycle through 'STUDY_PLAN_GALLERY'.
+   - 'Enter' calls 'fetchRemoteCommentary(gallery[index].url)'.
+   - 'Escape' returns to the main Options menu.
+ 
+Step 2: The Changelog Entry
+Add this to the top of your .changelog.md file to document the new acquisition method:
+Markdown
+Copy code
+### v0.47.0 — Remote Curriculum Gallery
+- **Remote Fetch Engine:** Implemented `fetchRemoteCommentary()` to allow the engine to download and install JSON study plans directly from a URL, bypassing the need for local file dialogs.
+- **Curriculum Gallery UI:** Added a "Browse Study Plans" submenu to the Options (`O`) menu. This features a pre-filled list of validated study plan URLs, allowing non-technical users to "point and click" to install new curriculum.
+- **Auditory Confirmation:** Integrated TTS status updates to confirm successful remote installations or report connection errors.
+Why this is more "Bulletproof":
+1. 
+No Files: The user never has to see a Windows/Mac file explorer.
+2. 
+No Typing: Since the URLs are pre-filled in an array, they don't even have to copy and paste. They just listen and pick.
+3. 
+Always Updated: If you update the Evangelism Explosion file on your server, the user gets the latest version the next time they "Pick" it from the list.
+Since we've spent today getting the

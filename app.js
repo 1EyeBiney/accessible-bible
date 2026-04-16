@@ -761,8 +761,13 @@ window.addEventListener('DOMContentLoaded', () => {
                     if (!Array.isArray(parsed)) { speak("Invalid commentary format."); return; }
                     const tx = db.transaction([COMMENTARY_STORE], "readwrite");
                     const store = tx.objectStore(COMMENTARY_STORE);
-                    parsed.forEach(note => store.put(note));
-                    tx.oncomplete = () => speak("Commentary module loaded.");
+                    store.clear().onsuccess = () => {
+                        parsed.forEach(note => store.put(note));
+                    };
+                    tx.oncomplete = () => {
+                        speak("Commentary module loaded.");
+                        silentVisualUpdate(currentVerseIndex);
+                    };
                 } catch (error) {
                     console.error("Import error:", error);
                     speak("Invalid commentary file.");

@@ -462,9 +462,9 @@ export function handleInput(event) {
         event.preventDefault();
         if (navigationHistory.length > 0) {
             updateVerseIndex(navigationHistory.pop());
-            readCurrentVerse();
+            const v = memoryCache[currentVerseIndex];
             playTone(600, 'sine', 0.1, 0.2);
-            speak("Returned.");
+            readCurrentVerse(false, "Returned to " + v.book_name + " chapter " + v.chapter + ", verse " + v.verse + ". ");
         } else {
             speak("No history.");
         }
