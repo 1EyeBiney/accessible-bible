@@ -200,14 +200,6 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 - **Audio Cues:** Increased the gain and adjusted waveforms for menu `open`, `close`, and `nav` sounds to make them punchier and more pronounced over screen reader speech.
 - **Menu Accessibility:** Updated the `A` key activation to inject a verbose ARIA instruction string detailing exact navigation keys. Clarified voice numbering to separate the menu item step from the total available voices.
 - **Playback Range:** Introduced a new "Range" parameter to the Auto Play menu, allowing users to cap continuous playback to the "End of Chapter", "Next 5 Verses", or "Next 10 Verses".
-### v0.40.0 — Input Routing & Menu Restoration
-- **Greedy Intercept Fix:** Resolved a critical bug where the v0.39.0 CSS Scroll Lock hijacked all `ArrowUp` and `ArrowDown` inputs while the visual buffer was open. This previously broke vertical navigation for the Help (`?`), Auto Play (`A`), and Options (`O`) menus.
-- **State-Aware Scrolling:** The scroll intercept is now strictly scoped using an `isMenuMode` exclusion check in `keyboard.js`, ensuring it only fires when viewing static Personal Notes or Expert Commentary.
-- **Explorer Restoration:** Restored the `F12` Keyboard Explorer and `?` Help Menu triggers at the top of the input router that were accidentally overwritten during the previous merge block.
-### v0.42.0 — Real-Time Visual Echo for Memo Mode
-- **Textarea Mirroring:** Wired the hidden note-taking `<textarea>` (activated by the `M` key) to the `#visual-buffer` using an `input` event listener. This provides sighted helpers with a real-time, large-text view of the note as it is being typed.
-- **Dynamic Auto-Scrolling:** Integrated a `scrollHeight` tracker into the input listener. If a user types a note that exceeds the `70vh` max-height established in v0.39.0, the buffer will automatically scroll to the bottom to keep the active text visible.
-- **Lifecycle Management:** Ensured the visual buffer initializes with existing note text when opening Memo mode and clears cleanly when pressing `Escape` to save.
 ### v0.52.0 — Multi-Line Menu Visuals
 - **`renderMenuVisuals(title, items, currentIndex)` (`keyboard.js`):** New exported function that renders a full HTML menu into `#visual-buffer`. Displays an uppercase title, a themed `<hr>` divider, and a styled `<ul>` where the active item is highlighted with an inverted accent-color pill and a `▶` marker. Non-active items are padded with a non-breaking space indent. Uses CSS custom properties so it automatically respects all theme variants.
 - **Wired to all menus (`keyboard.js`):** `renderMenuVisuals` is now the sole visual renderer for the Commentary Library (rich HTML with bold title and dimmed description), Options Menu, Verse Menu, and Auto Play Menu. All `updateVisualBuffer` calls inside those menu navigation and activation handlers have been replaced.
@@ -232,6 +224,20 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 - **Commentary Bulldozer (`app.js`):** Refactored `importCommentaryEl` transaction logic to call `store.clear()` before inserting new records, ensuring stale entries from a prior module are fully purged before the new dataset lands. Also added a `silentVisualUpdate(currentVerseIndex)` call inside `tx.oncomplete` so the commentary alert badge refreshes immediately after the load without requiring the user to navigate away and back.
 - **Backspace Audio Fix (`keyboard.js`):** Merged the Backspace backtrack announcement into a single `readCurrentVerse()` call with a prefixed location string ("Returned to [Book] chapter [N], verse [N]"). The `playTone` cue fires simultaneously rather than as a separate trailing `speak()`, eliminating the double-announcement race condition.
 
+### v0.46.0 — Omni-Jump Engine Merge & Bracket Parser
+- **Dual-Store Target Acquisition:** Upgraded the `Alt + J` Omni-Jump logic to simultaneously query both the `NOTES_STORE` and `COMMENTARY_STORE` for relational links. 
+- **Bracket Parser:** Implemented an intelligent parser that visually displays the `[[ ]]` formatting for sighted users but translates them into clean, human-readable audio cues for screen readers.
+
 ### v0.43.0 — Screen-Reader Safe Commentary Key
 - **Modifier Key Decoupling:** Removed the `Shift + Up Arrow` binding for Expert Commentary, as the `Shift` modifier was being intercepted by screen readers (NVDA/JAWS/Narrator) as a native text-selection command, preventing the browser from receiving the event.
 - **Dedicated Commentary Key:** Mapped Expert Commentary to the `Y` key. `ArrowUp` now exclusively handles Personal Notes, while `Y` exclusively handles Instructor/Expert Commentary, ensuring 100% reliability across all screen readers without requiring Focus Mode or Forms Mode.
+
+### v0.42.0 — Real-Time Visual Echo for Memo Mode
+- **Textarea Mirroring:** Wired the hidden note-taking `<textarea>` (activated by the `M` key) to the `#visual-buffer` using an `input` event listener. This provides sighted helpers with a real-time, large-text view of the note as it is being typed.
+- **Dynamic Auto-Scrolling:** Integrated a `scrollHeight` tracker into the input listener. If a user types a note that exceeds the `70vh` max-height established in v0.39.0, the buffer will automatically scroll to the bottom to keep the active text visible.
+- **Lifecycle Management:** Ensured the visual buffer initializes with existing note text when opening Memo mode and clears cleanly when pressing `Escape` to save.
+
+### v0.40.0 — Input Routing & Menu Restoration
+- **Greedy Intercept Fix:** Resolved a critical bug where the v0.39.0 CSS Scroll Lock hijacked all `ArrowUp` and `ArrowDown` inputs while the visual buffer was open. This previously broke vertical navigation for the Help (`?`), Auto Play (`A`), and Options (`O`) menus.
+- **State-Aware Scrolling:** The scroll intercept is now strictly scoped using an `isMenuMode` exclusion check in `keyboard.js`, ensuring it only fires when viewing static Personal Notes or Expert Commentary.
+- **Explorer Restoration:** Restored the `F12` Keyboard Explorer and `?` Help Menu triggers at the top of the input router that were accidentally overwritten during the previous merge block.

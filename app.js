@@ -244,10 +244,16 @@ export function silentVisualUpdate(newIndex) {
 
 // --- Core Navigation Logic ---
 export function readCurrentVerse(forceFull = false, customPrefix = null) {
-    if (!isReady || memoryCache.length === 0) return;
+    // GUARD CLAUSE: Abort if the cache is empty or the verse doesn't exist yet
+    if (!isReady || !memoryCache || memoryCache.length === 0 || !memoryCache[currentVerseIndex]) {
+        console.warn("Engine is fetching data or cache is empty. Pausing read.");
+        return;
+    }
 
-    document.getElementById('alert-note').style.display = 'none';
-    document.getElementById('alert-comm').style.display = 'none';
+    const alertNote = document.getElementById('alert-note');
+    const alertComm = document.getElementById('alert-comm');
+    if (alertNote) alertNote.style.display = 'none';
+    if (alertComm) alertComm.style.display = 'none';
 
     const verseObj = memoryCache[currentVerseIndex];
     currentBookName = verseObj.book_name;
@@ -258,7 +264,10 @@ export function readCurrentVerse(forceFull = false, customPrefix = null) {
         if (anchoredVerseIndex >= 0 && anchoredVerseIndex === currentVerseIndex) flagString += '[R] ';
         if (hasLinkFlag) flagString += '[J] ';
         const visualReference = `${verseObj.book_name} ${verseObj.chapter}:${verseObj.verse}`;
-        document.getElementById('content-display').innerHTML = `<strong>${visualReference}</strong><br><br>${flagString}${verseObj.text}`;
+        const contentDisplay = document.getElementById('content-display');
+        if (contentDisplay) {
+            contentDisplay.innerHTML = `<strong>${visualReference}</strong><br><br>${flagString}${verseObj.text}`;
+        }
     };
 
     let prefix;
@@ -803,30 +812,38 @@ export async function fetchAndLoadCommentary(filename) {
     }
 }
 
-export async function fetchAndLoadBible(filename) {
+export function fetchAndLoadBible(filename) {
     speak("Downloading translation...");
-    try {
-        const response = await fetch(`./translations/${filename}`);
-        if (!response.ok) throw new Error("Network fetch failed");
-        const data = await response.json();
+    // 1. Fetch the data FIRST, before opening any IndexedDB transaction
+    fetch(`./translations/${filename}`)
+        .then(response => {
+            if (!response.ok) throw new Error("Network fetch failed");
+            return response.json();
+        })
+        .then(data => {
+            // 2. Open the transaction only after data is fully ready in memory
+            const tx = db.transaction([TEXT_STORE], 'readwrite');
+            const store = tx.objectStore(TEXT_STORE);
 
-        const tx = db.transaction([TEXT_STORE], 'readwrite');
-        const store = tx.objectStore(TEXT_STORE);
-        store.clear();
+            // 3. Clear and repopulate safely inside one active transaction
+            store.clear();
+            data.forEach(verse => store.put(verse));
 
-        data.forEach(verse => store.put(verse));
-
-        tx.oncomplete = () => {
-            localStorage.setItem('currentBibleFile', filename);
-            loadToMemory(() => {
-                speak("Translation loaded.");
-                readCurrentVerse();
-            });
-        };
-    } catch (error) {
-        console.error("Translation Load Error:", error);
-        speak("Failed to load translation file.");
-    }
+            tx.oncomplete = () => {
+                localStorage.setItem('currentBibleFile', filename);
+                loadToMemory(() => {
+                    if (currentVerseIndex >= memoryCache.length) {
+                        currentVerseIndex = 0;
+                    }
+                    speak("Translation loaded.");
+                    readCurrentVerse();
+                });
+            };
+        })
+        .catch(err => {
+            console.error("Translation Load Error:", err);
+            speak("Failed to load translation file.");
+        });
 }
 
 window.addEventListener('beforeunload', () => {
