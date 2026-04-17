@@ -54,7 +54,9 @@ function checkAndLoadData(callback) {
 }
 
 function fetchBibleJSON(callback) {
-    fetch('bsb2.json')
+    const savedTranslation = localStorage.getItem('currentBibleFile') || 'bsb2.json';
+    const dbUrl = `./translations/${savedTranslation}`;
+    fetch(dbUrl)
         .then(response => response.json())
         .then(data => {
             const transaction = db.transaction([TEXT_STORE], "readwrite");

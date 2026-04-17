@@ -475,7 +475,7 @@ export function getKeyboardExplorerDescription(event) {
     if (keyUpper === 'P') return 'P: Play or Pause Auto Play continuous reading.';
     if (keyUpper === 'S') return 'S: Stop Auto Play continuous reading.';
     if (keyUpper === 'K') return 'K: Toggle bookmark for current verse.';
-    if (keyUpper === 'E') return 'E: Speak diagnostic engine state.';
+    if (keyUpper === 'E') return 'Opens the Version Library to change your Bible translation.';
     if (keyUpper === 'O') return 'O: Open Options menu to import/export data.';
     
     if (key === 'Enter') return 'Enter: Commit the current mode action.';
@@ -800,6 +800,32 @@ export async function fetchAndLoadCommentary(filename) {
     } catch (error) {
         console.error("Fetch error:", error);
         speak("Failed to load commentary file.");
+    }
+}
+
+export async function fetchAndLoadBible(filename) {
+    speak("Downloading translation...");
+    try {
+        const response = await fetch(`./translations/${filename}`);
+        if (!response.ok) throw new Error("Network fetch failed");
+        const data = await response.json();
+
+        const tx = db.transaction([TEXT_STORE], 'readwrite');
+        const store = tx.objectStore(TEXT_STORE);
+        store.clear();
+
+        data.forEach(verse => store.put(verse));
+
+        tx.oncomplete = () => {
+            localStorage.setItem('currentBibleFile', filename);
+            loadToMemory(() => {
+                speak("Translation loaded.");
+                readCurrentVerse();
+            });
+        };
+    } catch (error) {
+        console.error("Translation Load Error:", error);
+        speak("Failed to load translation file.");
     }
 }
 

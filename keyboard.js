@@ -1,5 +1,5 @@
 import { speak } from './ui.js';
-import { fetchAndLoadCommentary } from './app.js';
+import { fetchAndLoadCommentary, fetchAndLoadBible } from './app.js';
 import {
     currentVerseIndex, currentBookName, isReady, isInitialized,
     updateVerseIndex, updateBookName, setIsReady, toggleWelcomeMode, toggleTutorialMode,
@@ -34,6 +34,27 @@ export function updateVisualBuffer(modeText, valueText) {
     }
 }
 
+export function renderMenuVisuals(title, items, currentIndex) {
+    const visualBuffer = document.getElementById('visual-buffer');
+    if (!visualBuffer) return;
+    visualBuffer.style.display = 'block';
+
+    let html = `<div style="text-transform: uppercase; letter-spacing: 2px;">${title}</div>`;
+    html += `<hr style="border-color: var(--accent-color); margin: 15px 0;">`;
+    html += `<ul style="list-style: none; padding: 0; text-align: left; font-size: 1.8rem; line-height: 1.4;">`;
+
+    items.forEach((item, index) => {
+        if (index === currentIndex) {
+            html += `<li style="color: var(--bg-color); background-color: var(--accent-color); padding: 10px; border-radius: 6px; margin-bottom: 5px;">▶ ${item}</li>`;
+        } else {
+            html += `<li style="padding: 10px; margin-bottom: 5px;">&nbsp;&nbsp;${item}</li>`;
+        }
+    });
+
+    html += `</ul>`;
+    visualBuffer.innerHTML = html;
+}
+
     export function updateSearchVisualBuffer(searchText = '') {
         if (searchText) {
             updateVisualBuffer("SEARCH DATABASE", searchText + " | [ENTER] to Search");
@@ -61,6 +82,9 @@ export let isAutoPlayMenuMode = false;
 export let isLibraryMode = false;
 export let libraryManifest = [];
 export let currentLibraryIndex = 0;
+export let isVersionMode = false;
+export let versionManifest = [];
+export let currentVersionIndex = 0;
 export let currentMenuTitle = "";
 export let isKeyboardExplorer = false;
 export let isHelpMode = false;
@@ -75,6 +99,7 @@ export function clearAllModes() {
     isBookSearchMode = false; isChapterMode = false; isVerseMode = false;
     isSearchMode = false; isNoteMode = false; isOptionsMenuMode = false; isAutoPlayMenuMode = false;
     isLibraryMode = false;
+    isVersionMode = false;
     isHelpMode = false; isHelpMenuMode = false; isKeyboardExplorer = false;
     currentMenuTitle = "";
     inputBuffer = ''; lastSearchLetter = '';
@@ -300,7 +325,8 @@ export function handleInput(event) {
             currentMenuIndex = (currentMenuIndex + 1) % 6;
             playAutoPlayUI('nav');
             const displayString = getAutoPlayMenuString(currentMenuIndex);
-            updateVisualBuffer("AUTO PLAY MENU", getAutoPlayMenuString(currentMenuIndex));
+            const autoPlayItems = [0, 1, 2, 3, 4, 5].map(i => getAutoPlayMenuString(i));
+            renderMenuVisuals("AUTO PLAY MENU", autoPlayItems, currentMenuIndex);
             speak(displayString);
             return;
         }
@@ -309,7 +335,8 @@ export function handleInput(event) {
             currentMenuIndex = (currentMenuIndex - 1 + 6) % 6;
             playAutoPlayUI('nav');
             const displayString = getAutoPlayMenuString(currentMenuIndex);
-            updateVisualBuffer("AUTO PLAY MENU", getAutoPlayMenuString(currentMenuIndex));
+            const autoPlayItems = [0, 1, 2, 3, 4, 5].map(i => getAutoPlayMenuString(i));
+            renderMenuVisuals("AUTO PLAY MENU", autoPlayItems, currentMenuIndex);
             speak(displayString);
             return;
         }
@@ -337,7 +364,8 @@ export function handleInput(event) {
             saveAutoPlaySettings();
             playAutoPlayUI('change');
             const displayString = getAutoPlayMenuString(currentMenuIndex);
-            updateVisualBuffer("AUTO PLAY MENU", getAutoPlayMenuString(currentMenuIndex));
+            const autoPlayItems = [0, 1, 2, 3, 4, 5].map(i => getAutoPlayMenuString(i));
+            renderMenuVisuals("AUTO PLAY MENU", autoPlayItems, currentMenuIndex);
             speak(displayString);
             return;
         }
@@ -358,7 +386,8 @@ export function handleInput(event) {
             currentLibraryIndex = (currentLibraryIndex + 1) % libraryManifest.length;
             const item = libraryManifest[currentLibraryIndex];
             const announcement = (currentLibraryIndex + 1) + " of " + libraryManifest.length + ": " + item.title + ". " + item.description;
-            updateVisualBuffer("COMMENTARY LIBRARY", announcement);
+            const displayItems = libraryManifest.map(item => `<strong>${item.title}</strong><br><span style="font-size: 1.2rem; opacity: 0.9;">${item.description}</span>`);
+            renderMenuVisuals("COMMENTARY LIBRARY", displayItems, currentLibraryIndex);
             speak(announcement);
             return;
         }
@@ -367,7 +396,8 @@ export function handleInput(event) {
             currentLibraryIndex = (currentLibraryIndex - 1 + libraryManifest.length) % libraryManifest.length;
             const item = libraryManifest[currentLibraryIndex];
             const announcement = (currentLibraryIndex + 1) + " of " + libraryManifest.length + ": " + item.title + ". " + item.description;
-            updateVisualBuffer("COMMENTARY LIBRARY", announcement);
+            const displayItems = libraryManifest.map(item => `<strong>${item.title}</strong><br><span style="font-size: 1.2rem; opacity: 0.9;">${item.description}</span>`);
+            renderMenuVisuals("COMMENTARY LIBRARY", displayItems, currentLibraryIndex);
             speak(announcement);
             return;
         }
@@ -378,6 +408,34 @@ export function handleInput(event) {
             return;
         }
 
+        return;
+    }
+
+    if (isVersionMode) {
+        event.preventDefault();
+
+        if (key === 'Escape') {
+            clearAllModes();
+            clearVisualBuffer();
+            speak("Exited Version Library.");
+            return;
+        }
+        if (key === 'ArrowDown' || key === 'ArrowUp') {
+            if (key === 'ArrowDown') currentVersionIndex = (currentVersionIndex + 1) % versionManifest.length;
+            if (key === 'ArrowUp') currentVersionIndex = (currentVersionIndex - 1 + versionManifest.length) % versionManifest.length;
+            const item = versionManifest[currentVersionIndex];
+            const displayItems = versionManifest.map(i => `<strong>${i.title}</strong><br><span style="font-size: 1.2rem; opacity: 0.9;">${i.description}</span>`);
+            renderMenuVisuals("VERSION LIBRARY", displayItems, currentVersionIndex);
+            speak(`${currentVersionIndex + 1} of ${versionManifest.length}: ${item.title}.`);
+            return;
+        }
+        if (key === 'Enter') {
+            const selectedFile = versionManifest[currentVersionIndex].filename;
+            clearAllModes();
+            clearVisualBuffer();
+            fetchAndLoadBible(selectedFile);
+            return;
+        }
         return;
     }
 
@@ -396,7 +454,7 @@ export function handleInput(event) {
             if (menuOptions[currentMenuIndex].startsWith("Boot Location")) {
                 announcement += ", use spacebar to change";
             }
-            updateVisualBuffer(currentMenuTitle, menuOptions[currentMenuIndex]);
+            renderMenuVisuals(currentMenuTitle, menuOptions, currentMenuIndex);
             speak(announcement);
             return;
         }
@@ -407,7 +465,7 @@ export function handleInput(event) {
             if (menuOptions[currentMenuIndex].startsWith("Boot Location")) {
                 announcement += ", use spacebar to change";
             }
-            updateVisualBuffer(currentMenuTitle, menuOptions[currentMenuIndex]);
+            renderMenuVisuals(currentMenuTitle, menuOptions, currentMenuIndex);
             speak(announcement);
             return;
         }
@@ -573,7 +631,7 @@ export function handleInput(event) {
         menuOptions = ['Edit Note', 'Delete Note', 'Copy Verse'];
         currentMenuIndex = 0;
         currentMenuTitle = "VERSE MENU";
-        updateVisualBuffer(currentMenuTitle, menuOptions[0]);
+        renderMenuVisuals(currentMenuTitle, menuOptions, currentMenuIndex);
         speak("Verse Menu. 1 of 3: Edit Note. Up and down to navigate, Enter to select, Escape to cancel.");
         return;
     }
@@ -771,8 +829,19 @@ export function handleInput(event) {
             }
             break;
         case 'E':
-            const testament = isReady ? memoryCache[currentVerseIndex].testament : 'unknown';
-            speak(`Echo Chamber active. Index ${currentVerseIndex}. Testament: ${testament}. Ready state: ${isReady}`);
+        case 'e':
+            event.preventDefault();
+            fetch('./translations/manifest_bibles.json', { cache: 'no-store' })
+                .then(res => res.json())
+                .then(data => {
+                    versionManifest = data;
+                    currentVersionIndex = 0;
+                    clearAllModes();
+                    isVersionMode = true;
+                    const displayItems = versionManifest.map(item => `<strong>${item.title}</strong><br><span style="font-size: 1.2rem; opacity: 0.9;">${item.description}</span>`);
+                    renderMenuVisuals("VERSION LIBRARY", displayItems, currentVersionIndex);
+                    speak(`Version Library. 1 of ${versionManifest.length}. ${versionManifest[0].title}.`);
+                }).catch(() => speak("Failed to load version manifest."));
             break;
         case 'O':
             event.preventDefault();
@@ -782,7 +851,7 @@ export function handleInput(event) {
             menuOptions = ['Export Personal Notes', 'Import Personal Notes', 'Boot Location: ' + bootPreference];
             currentMenuIndex = 0;
             currentMenuTitle = "OPTIONS MENU";
-            updateVisualBuffer(currentMenuTitle, menuOptions[0]);
+            renderMenuVisuals(currentMenuTitle, menuOptions, currentMenuIndex);
             speak("Options Menu. 1 of 3: Export Personal Notes. Up and down arrows to navigate, Enter to select, Escape to close.");
             break;
         case 'A':
@@ -793,7 +862,8 @@ export function handleInput(event) {
             currentMenuIndex = 0;
             playAutoPlayUI('open');
             const introText = "Auto Play Menu. Use up and down arrows to navigate the menu. Use left and right arrows to cycle selections. Use Escape to save selections and exit. " + getAutoPlayMenuString(0);
-            updateVisualBuffer(currentMenuTitle, introText);
+            const autoPlayItems = [0, 1, 2, 3, 4, 5].map(i => getAutoPlayMenuString(i));
+            renderMenuVisuals('AUTO PLAY MENU', autoPlayItems, 0);
             speak(introText);
             break;
         case 'P':
@@ -836,7 +906,8 @@ export function handleInput(event) {
                         currentLibraryIndex = 0;
                         const item = libraryManifest[0];
                         const announcement = "Load Commentary. " + item.title + ". " + item.description;
-                        updateVisualBuffer("COMMENTARY LIBRARY", announcement);
+                        const displayItems = libraryManifest.map(item => `<strong>${item.title}</strong><br><span style="font-size: 1.2rem; opacity: 0.9;">${item.description}</span>`);
+                        renderMenuVisuals("COMMENTARY LIBRARY", displayItems, 0);
                         speak(announcement);
                     })
                     .catch(() => speak("Could not reach commentary library."));

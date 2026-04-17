@@ -1,0 +1,12 @@
+[
+  {
+    "title": "Berean Standard Bible",
+    "filename": "bsb2.json",
+    "description": "A modern, highly accurate English translation."
+  },
+  {
+    "title": "King James Version (PCE)",
+    "filename": "kjv_ab.json",
+    "description": "The Pure Cambridge Edition of the historic King James text."
+  }
+]

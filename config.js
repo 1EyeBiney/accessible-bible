@@ -23,7 +23,8 @@ export const helpMenuData = [
     "Utilities: Press Tab for current location. Press S for chapter stats. Press F12 for Keyboard Explorer.",
     "A: Open Auto Play Menu",
     "P: Play or Pause Auto Play continuous reading",
-    "S: Stop Auto Play continuous reading"
+    "S: Stop Auto Play continuous reading",
+    "E: Version Library"
 ];
 
 export const AUDIO_GAIN_BOOST = 1.45;
