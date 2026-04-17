@@ -11,7 +11,8 @@ import {
     startWelcomeSequence, endWelcomeSequence, startTutorialSequence, endTutorialSequence,
     updateTutorialChapter, playTutorialChapter, getKeyboardExplorerDescription, navigateBookmarks,
     toggleCurrentBookmark, parseLinkTarget, isWelcomeMode, isTutorialMode, setWelcomeMode, setTutorialMode,
-    bootOptions, bootPreference, cycleBootPreference, copyToClipboard, resetBookmarkJumps
+    bootOptions, bootPreference, cycleBootPreference, copyToClipboard, resetBookmarkJumps,
+    activeMenu, activeReadMode, libraryOptions, setActiveMenu, setActiveReadMode, closeMenus
 } from './app.js';
 import { 
     memoryCache, db, bookmarksCache, loadToMemory 
@@ -85,6 +86,8 @@ export let currentLibraryIndex = 0;
 export let isVersionMode = false;
 export let versionManifest = [];
 export let currentVersionIndex = 0;
+export let booksManifest = [];
+export let currentBooksIndex = 0;
 export let currentMenuTitle = "";
 export let isKeyboardExplorer = false;
 export let isHelpMode = false;
@@ -105,6 +108,7 @@ export function clearAllModes() {
     inputBuffer = ''; lastSearchLetter = '';
     lastBookSearchKey = '';
     currentBookSearchIndex = 0;
+    setActiveMenu(null);
     updateVisualBuffer(null);
     const searchBadge = document.getElementById('alert-search');
     if (searchBadge) searchBadge.style.display = 'none';
@@ -367,6 +371,188 @@ export function handleInput(event) {
             const autoPlayItems = [0, 1, 2, 3, 4, 5].map(i => getAutoPlayMenuString(i));
             renderMenuVisuals("AUTO PLAY MENU", autoPlayItems, currentMenuIndex);
             speak(displayString);
+            return;
+        }
+
+        return;
+    }
+
+    if (activeMenu === 'library') {
+        event.preventDefault();
+
+        if (key === 'Escape') {
+            closeMenus();
+            clearVisualBuffer();
+            return;
+        }
+
+        if (key === 'ArrowDown') {
+            currentLibraryIndex = (currentLibraryIndex + 1) % libraryOptions.length;
+            renderMenuVisuals("LIBRARY", libraryOptions, currentLibraryIndex);
+            speak(libraryOptions[currentLibraryIndex]);
+            return;
+        }
+
+        if (key === 'ArrowUp') {
+            currentLibraryIndex = (currentLibraryIndex - 1 + libraryOptions.length) % libraryOptions.length;
+            renderMenuVisuals("LIBRARY", libraryOptions, currentLibraryIndex);
+            speak(libraryOptions[currentLibraryIndex]);
+            return;
+        }
+
+        if (key === 'Enter') {
+            const selected = libraryOptions[currentLibraryIndex];
+            if (selected === 'Commentaries') {
+                fetch('./commentaries/manifest.json', { cache: 'no-store' })
+                    .then(res => { if (!res.ok) throw new Error('Network error'); return res.json(); })
+                    .then(data => {
+                        libraryManifest = data;
+                        currentLibraryIndex = 0;
+                        setActiveMenu('commentaries');
+                        const displayItems = libraryManifest.map(i => `<strong>${i.title}</strong><br><span style="font-size: 1.2rem; opacity: 0.9;">${i.description}</span>`);
+                        renderMenuVisuals("COMMENTARY LIBRARY", displayItems, 0);
+                        speak(`Commentaries. 1 of ${libraryManifest.length}. ${libraryManifest[0].title}. ${libraryManifest[0].description}`);
+                    }).catch(() => speak("Could not reach commentary library."));
+                return;
+            }
+            if (selected === 'Bibles') {
+                fetch('./translations/manifest_bibles.json', { cache: 'no-store' })
+                    .then(res => res.json())
+                    .then(data => {
+                        versionManifest = data;
+                        currentVersionIndex = 0;
+                        setActiveMenu('bibles');
+                        const displayItems = versionManifest.map(i => `<strong>${i.title}</strong><br><span style="font-size: 1.2rem; opacity: 0.9;">${i.description}</span>`);
+                        renderMenuVisuals("BIBLE VERSIONS", displayItems, currentVersionIndex);
+                        speak(`Bibles. 1 of ${versionManifest.length}. ${versionManifest[0].title}.`);
+                    }).catch(() => speak("Failed to load bible manifest."));
+                return;
+            }
+            if (selected === 'Books') {
+                fetch('./translations/manifest_books.json', { cache: 'no-store' })
+                    .then(res => res.json())
+                    .then(data => {
+                        booksManifest = data;
+                        currentBooksIndex = 0;
+                        setActiveMenu('books');
+                        const displayItems = booksManifest.map(i => `<strong>${i.title}</strong><br><span style="font-size: 1.2rem; opacity: 0.9;">${i.description}</span>`);
+                        renderMenuVisuals("BOOKS", displayItems, currentBooksIndex);
+                        speak(`Books. 1 of ${booksManifest.length}. ${booksManifest[0].title}.`);
+                    }).catch(() => speak("Failed to load books manifest."));
+                return;
+            }
+        }
+
+        return;
+    }
+
+    if (activeMenu === 'bibles') {
+        event.preventDefault();
+
+        if (key === 'Escape') {
+            closeMenus();
+            clearVisualBuffer();
+            return;
+        }
+
+        if (key === 'ArrowDown') {
+            currentVersionIndex = (currentVersionIndex + 1) % versionManifest.length;
+            const item = versionManifest[currentVersionIndex];
+            const displayItems = versionManifest.map(i => `<strong>${i.title}</strong><br><span style="font-size: 1.2rem; opacity: 0.9;">${i.description}</span>`);
+            renderMenuVisuals("BIBLE VERSIONS", displayItems, currentVersionIndex);
+            speak(`${currentVersionIndex + 1} of ${versionManifest.length}: ${item.title}.`);
+            return;
+        }
+
+        if (key === 'ArrowUp') {
+            currentVersionIndex = (currentVersionIndex - 1 + versionManifest.length) % versionManifest.length;
+            const item = versionManifest[currentVersionIndex];
+            const displayItems = versionManifest.map(i => `<strong>${i.title}</strong><br><span style="font-size: 1.2rem; opacity: 0.9;">${i.description}</span>`);
+            renderMenuVisuals("BIBLE VERSIONS", displayItems, currentVersionIndex);
+            speak(`${currentVersionIndex + 1} of ${versionManifest.length}: ${item.title}.`);
+            return;
+        }
+
+        if (key === 'Enter') {
+            const selectedFile = versionManifest[currentVersionIndex].filename;
+            closeMenus();
+            clearVisualBuffer();
+            fetchAndLoadBible(selectedFile);
+            return;
+        }
+
+        return;
+    }
+
+    if (activeMenu === 'books') {
+        event.preventDefault();
+
+        if (key === 'Escape') {
+            closeMenus();
+            clearVisualBuffer();
+            return;
+        }
+
+        if (key === 'ArrowDown') {
+            currentBooksIndex = (currentBooksIndex + 1) % booksManifest.length;
+            const item = booksManifest[currentBooksIndex];
+            const displayItems = booksManifest.map(i => `<strong>${i.title}</strong><br><span style="font-size: 1.2rem; opacity: 0.9;">${i.description}</span>`);
+            renderMenuVisuals("BOOKS", displayItems, currentBooksIndex);
+            speak(`${currentBooksIndex + 1} of ${booksManifest.length}: ${item.title}.`);
+            return;
+        }
+
+        if (key === 'ArrowUp') {
+            currentBooksIndex = (currentBooksIndex - 1 + booksManifest.length) % booksManifest.length;
+            const item = booksManifest[currentBooksIndex];
+            const displayItems = booksManifest.map(i => `<strong>${i.title}</strong><br><span style="font-size: 1.2rem; opacity: 0.9;">${i.description}</span>`);
+            renderMenuVisuals("BOOKS", displayItems, currentBooksIndex);
+            speak(`${currentBooksIndex + 1} of ${booksManifest.length}: ${item.title}.`);
+            return;
+        }
+
+        if (key === 'Enter') {
+            const selectedFile = booksManifest[currentBooksIndex].filename;
+            closeMenus();
+            clearVisualBuffer();
+            fetchAndLoadBible(selectedFile, 'book');
+            return;
+        }
+
+        return;
+    }
+
+    if (activeMenu === 'commentaries') {
+        event.preventDefault();
+
+        if (key === 'Escape') {
+            closeMenus();
+            clearVisualBuffer();
+            return;
+        }
+
+        if (key === 'ArrowDown') {
+            currentLibraryIndex = (currentLibraryIndex + 1) % libraryManifest.length;
+            const item = libraryManifest[currentLibraryIndex];
+            const displayItems = libraryManifest.map(i => `<strong>${i.title}</strong><br><span style="font-size: 1.2rem; opacity: 0.9;">${i.description}</span>`);
+            renderMenuVisuals("COMMENTARY LIBRARY", displayItems, currentLibraryIndex);
+            speak(`${currentLibraryIndex + 1} of ${libraryManifest.length}: ${item.title}. ${item.description}`);
+            return;
+        }
+
+        if (key === 'ArrowUp') {
+            currentLibraryIndex = (currentLibraryIndex - 1 + libraryManifest.length) % libraryManifest.length;
+            const item = libraryManifest[currentLibraryIndex];
+            const displayItems = libraryManifest.map(i => `<strong>${i.title}</strong><br><span style="font-size: 1.2rem; opacity: 0.9;">${i.description}</span>`);
+            renderMenuVisuals("COMMENTARY LIBRARY", displayItems, currentLibraryIndex);
+            speak(`${currentLibraryIndex + 1} of ${libraryManifest.length}: ${item.title}. ${item.description}`);
+            return;
+        }
+
+        if (key === 'Enter') {
+            fetchAndLoadCommentary(libraryManifest[currentLibraryIndex].filename);
+            closeMenus();
+            clearVisualBuffer();
             return;
         }
 
@@ -828,20 +1014,6 @@ export function handleInput(event) {
                 playTutorialChapter(0);
             }
             break;
-        case 'E':
-        case 'e':
-            event.preventDefault();
-            fetch('./translations/manifest_bibles.json', { cache: 'no-store' })
-                .then(res => res.json())
-                .then(data => {
-                    versionManifest = data;
-                    currentVersionIndex = 0;
-                    clearAllModes();
-                    isVersionMode = true;
-                    const displayItems = versionManifest.map(item => `<strong>${item.title}</strong><br><span style="font-size: 1.2rem; opacity: 0.9;">${item.description}</span>`);
-                    renderMenuVisuals("VERSION LIBRARY", displayItems, currentVersionIndex);
-                    speak(`Version Library. 1 of ${versionManifest.length}. ${versionManifest[0].title}.`);
-                }).catch(() => speak("Failed to load version manifest."));
             break;
         case 'O':
             event.preventDefault();
@@ -874,6 +1046,18 @@ export function handleInput(event) {
         case 'B':
             event.preventDefault();
             if (!isReady) break;
+            if (activeReadMode === 'book') {
+                // In book mode, jump to the next section (where book_number increases)
+                const curBookNum = memoryCache[currentVerseIndex].book_number;
+                const nextPartIdx = memoryCache.findIndex((v, i) => i > currentVerseIndex && v.book_number > curBookNum);
+                if (nextPartIdx !== -1) {
+                    updateVerseIndex(nextPartIdx);
+                    readCurrentVerse(false, 'Next Part. ');
+                } else {
+                    speak("End of book.");
+                }
+                break;
+            }
             clearAllModes();
             isBookSearchMode = true;
             updateVisualBuffer("Book Search", "Type a letter");
@@ -896,21 +1080,12 @@ export function handleInput(event) {
         case 'L':
             event.preventDefault();
             if (!event.altKey) {
-                // Bare L: Open Commentary Library
-                fetch('./commentaries/manifest.json', { cache: 'no-store' })
-                    .then(res => { if (!res.ok) throw new Error('Network error'); return res.json(); })
-                    .then(data => {
-                        clearAllModes();
-                        libraryManifest = data;
-                        isLibraryMode = true;
-                        currentLibraryIndex = 0;
-                        const item = libraryManifest[0];
-                        const announcement = "Load Commentary. " + item.title + ". " + item.description;
-                        const displayItems = libraryManifest.map(item => `<strong>${item.title}</strong><br><span style="font-size: 1.2rem; opacity: 0.9;">${item.description}</span>`);
-                        renderMenuVisuals("COMMENTARY LIBRARY", displayItems, 0);
-                        speak(announcement);
-                    })
-                    .catch(() => speak("Could not reach commentary library."));
+                // Bare L: Open Master Library Menu
+                clearAllModes();
+                setActiveMenu('library');
+                currentLibraryIndex = 0;
+                renderMenuVisuals("LIBRARY", libraryOptions, 0);
+                speak("Library. Use up and down arrows to navigate. Press enter to select. Commentaries.");
                 break;
             }
             // Alt + L: Drop relational link
@@ -1010,6 +1185,10 @@ export function handleInput(event) {
                 cycleVolume();
             } else {
                 if (!isReady) break;
+                if (activeReadMode === 'book') {
+                    speak("Verse jumping disabled. Use arrows to navigate paragraphs.");
+                    break;
+                }
                 clearAllModes();
                 isVerseMode = true;
                 updateVisualBuffer("Verse Jump", "Type a number");

@@ -1,4 +1,4 @@
-import { memoryCache, currentVerseIndex, silentVisualUpdate } from './app.js';
+import { memoryCache, currentVerseIndex, silentVisualUpdate, activeReadMode } from './app.js';
 
 export let isAutoPlaying = false;
 let activeUtterances = [];
@@ -203,18 +203,34 @@ function queueRemainingVerses(startIndex) {
         let textToSpeak = verseObj.text;
 
         let prefix = "";
-        if (i === startIndex) {
-            prefix = `${verseObj.book_name} Chapter ${verseObj.chapter}, verse ${verseObj.verse}. `;
+        if (activeReadMode === 'book') {
+            // In book mode: announce chapter only when it changes, never verse numbers.
+            if (i === startIndex) {
+                prefix = `${verseObj.book_name}. `;
+            } else {
+                const prevVerse = memoryCache[i - 1];
+                if (verseObj.book_name !== prevVerse.book_name) {
+                    prefix = `${verseObj.book_name}. `;
+                } else if (verseObj.chapter !== prevVerse.chapter) {
+                    prefix = `Chapter ${verseObj.chapter}. `;
+                } else if (autoPlaySettings.transition === 0) {
+                    prefix = "... ";
+                }
+            }
         } else {
-            const prevVerse = memoryCache[i - 1];
-            if (verseObj.book_name !== prevVerse.book_name) {
+            if (i === startIndex) {
                 prefix = `${verseObj.book_name} Chapter ${verseObj.chapter}, verse ${verseObj.verse}. `;
-            } else if (verseObj.chapter !== prevVerse.chapter) {
-                prefix = `Chapter ${verseObj.chapter}, verse ${verseObj.verse}. `;
-            } else if (autoPlaySettings.transition === 1) {
-                prefix = `${verseObj.verse}. `;
-            } else if (autoPlaySettings.transition === 0) {
-                prefix = "... ";
+            } else {
+                const prevVerse = memoryCache[i - 1];
+                if (verseObj.book_name !== prevVerse.book_name) {
+                    prefix = `${verseObj.book_name} Chapter ${verseObj.chapter}, verse ${verseObj.verse}. `;
+                } else if (verseObj.chapter !== prevVerse.chapter) {
+                    prefix = `Chapter ${verseObj.chapter}, verse ${verseObj.verse}. `;
+                } else if (autoPlaySettings.transition === 1) {
+                    prefix = `${verseObj.verse}. `;
+                } else if (autoPlaySettings.transition === 0) {
+                    prefix = "... ";
+                }
             }
         }
         textToSpeak = prefix + textToSpeak;
@@ -269,11 +285,21 @@ export function stopAutoPlay(autoEnd = false) {
     const targetIndex = autoPlaySettings.postFocus === 1 ? startingVerseIndex : currentVerseIndex;
     const targetVerse = memoryCache[targetIndex];
 
-    let msg = `Verse ${targetVerse.verse}`;
-    if (finalVerse.book_name !== startVerse.book_name) {
-        msg = `${targetVerse.book_name} Chapter ${targetVerse.chapter}, verse ${targetVerse.verse}`;
-    } else if (finalVerse.chapter !== startVerse.chapter) {
-        msg = `Chapter ${targetVerse.chapter}, verse ${targetVerse.verse}`;
+    let msg;
+    if (activeReadMode === 'book') {
+        // In book mode: only announce the chapter if it changed during playback.
+        if (finalVerse.chapter !== startVerse.chapter) {
+            msg = `Chapter ${targetVerse.chapter}`;
+        } else {
+            msg = targetVerse.book_name;
+        }
+    } else {
+        msg = `Verse ${targetVerse.verse}`;
+        if (finalVerse.book_name !== startVerse.book_name) {
+            msg = `${targetVerse.book_name} Chapter ${targetVerse.chapter}, verse ${targetVerse.verse}`;
+        } else if (finalVerse.chapter !== startVerse.chapter) {
+            msg = `Chapter ${targetVerse.chapter}, verse ${targetVerse.verse}`;
+        }
     }
 
     let selectedVoice = curatedVoices[autoPlaySettings.voiceIndex];

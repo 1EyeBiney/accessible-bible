@@ -50,6 +50,20 @@ export let bootOptions = ['Last Spot', 'Genesis', 'Matthew', 'Last Bookmark'];
 export let bootPreference = localStorage.getItem('bootPreference') || 'Last Spot';
 const onTrackEnded = () => playNextTrack();
 
+// --- Library & Read Mode State ---
+export let activeMenu = null; // Can be null, 'library', 'bibles', 'books', or 'commentaries'
+export let activeReadMode = 'bible'; // Can be 'bible' or 'book'
+export const libraryOptions = ['Commentaries', 'Bibles', 'Books'];
+export let currentLibraryIndex = 0;
+
+export function setActiveMenu(val) { activeMenu = val; }
+export function setActiveReadMode(val) { activeReadMode = val; }
+export function setLibraryIndex(val) { currentLibraryIndex = val; }
+export function closeMenus() {
+    activeMenu = null;
+    speak("Menu closed.");
+}
+
 export function cycleBootPreference() {
     const idx = bootOptions.indexOf(bootPreference);
     bootPreference = bootOptions[(idx + 1) % bootOptions.length];
@@ -273,6 +287,11 @@ export function readCurrentVerse(forceFull = false, customPrefix = null) {
     let prefix;
     if (customPrefix !== null) {
         prefix = customPrefix;
+        lastAnnouncedBook = verseObj.book_name;
+        lastAnnouncedChapter = verseObj.chapter;
+    } else if (activeReadMode === 'book') {
+        // In book/literature mode, speak only the raw text — no verse or chapter labels.
+        prefix = '';
         lastAnnouncedBook = verseObj.book_name;
         lastAnnouncedChapter = verseObj.chapter;
     } else {
@@ -812,8 +831,9 @@ export async function fetchAndLoadCommentary(filename) {
     }
 }
 
-export function fetchAndLoadBible(filename) {
+export function fetchAndLoadBible(filename, mode = 'bible') {
     speak("Downloading translation...");
+    activeReadMode = mode;
     // 1. Fetch the data FIRST, before opening any IndexedDB transaction
     fetch(`./translations/${filename}`)
         .then(response => {
