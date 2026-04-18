@@ -1,35 +1,5 @@
 [
   {
-    "title": "Berean Standard Bible",
-    "filename": "bsb2.json",
-    "description": "A modern, highly accurate English translation."
-  },
-  {
-    "title": "King James Version (PCE)",
-    "filename": "kjv_ab.json",
-    "description": "The Pure Cambridge Edition of the historic King James text."
-  },
-  {
-    "title": "American Standard Version",
-    "filename": "asv_ab.json",
-    "description": "The 1901 ASV, known for its strict, literal translation methodology."
-  },
-  {
-    "title": "Bible in Basic English",
-    "filename": "bbe_ab.json",
-    "description": "A highly accessible translation utilizing a strict 1,000-word vocabulary limit."
-  },
-  {
-    "title": "Geneva Bible (1599)",
-    "filename": "geneva_ab.json",
-    "description": "The historic Bible of the Protestant Reformation and the Pilgrims."
-  },
-  {
-    "title": "Young's Literal Translation",
-    "filename": "ylt_ab.json",
-    "description": "An extremely strict, word-for-word translation prioritizing original Hebrew and Greek tenses."
-  },
-  {
     "title": "The Story of My Life (Helen Keller)",
     "filename": "keller_life_ab.json",
     "description": "An interactive, accessible rendering of Helen Keller's 1903 autobiography."

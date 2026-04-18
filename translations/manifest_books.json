@@ -1,7 +1,12 @@
 [
   {
-    "title": "The Story of My Life (Helen Keller)",
-    "filename": "keller_life_ab.json",
-    "description": "An interactive, accessible rendering of Helen Keller's 1903 autobiography."
+    "title": "The Story of My Life",
+    "description": "The autobiography of Helen Keller.",
+    "filename": "keller_ab.json"
+  },
+  {
+    "title": "The Pilgrim's Progress",
+    "description": "John Bunyan's classic spiritual allegory of the Christian journey.",
+    "filename": "pilgrims_progress.json"
   }
 ]
