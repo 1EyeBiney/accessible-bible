@@ -23,5 +23,25 @@
     "title": "Twenty Thousand Leagues under the Sea",
     "description": "Jules Verne's classic sci-fi underwater adventure.",
     "filename": "verne_league_ab.json"
+  },
+  {
+    "title": "Grace Abounding to the Chief of Sinners",
+    "description": "John Bunyan's deeply personal and raw spiritual autobiography.",
+    "filename": "bunyon_grace.json"
+  },
+  {
+    "title": "The Story of the Hymns and Tunes",
+    "description": "The rich history and behind-the-scenes stories of classic hymns.",
+    "filename": "butterworth_hymns.json"
+  },
+  {
+    "title": "The Imitation of Christ",
+    "description": "Thomas à Kempis's timeless and accessible devotional classic.",
+    "filename": "thomas_imitation.json"
+  },
+  {
+    "title": "Orthodoxy",
+    "description": "G.K. Chesterton's witty, engaging, and philosophical spiritual journey.",
+    "filename": "chesterton_orthodoxy.json"
   }
 ]
