@@ -223,7 +223,8 @@ export function silentVisualUpdate(newIndex) {
         if (bookmarksCache.includes(verseObj.id)) flagString += '[B] ';
         if (anchoredVerseIndex >= 0 && anchoredVerseIndex === currentVerseIndex) flagString += '[R] ';
         if (hasLinkFlag) flagString += '[J] ';
-        const visualReference = `${verseObj.book_name} ${verseObj.chapter}:${verseObj.verse}`;
+        const label = (activeReadMode === 'book') ? 'Paragraph' : 'Verse';
+        const visualReference = `${verseObj.book_name} ${verseObj.chapter} ${label} ${verseObj.verse}`;
         const contentDisplay = document.getElementById('content-display');
         if (contentDisplay) {
             contentDisplay.innerHTML = `<strong>${visualReference}</strong><br><br>${flagString}${verseObj.text}`;
@@ -277,30 +278,31 @@ export function readCurrentVerse(forceFull = false, customPrefix = null) {
         if (bookmarksCache.includes(verseObj.id)) flagString += '[B] ';
         if (anchoredVerseIndex >= 0 && anchoredVerseIndex === currentVerseIndex) flagString += '[R] ';
         if (hasLinkFlag) flagString += '[J] ';
-        const visualReference = `${verseObj.book_name} ${verseObj.chapter}:${verseObj.verse}`;
+        const label = (activeReadMode === 'book') ? 'Paragraph' : 'Verse';
+        const visualReference = `${verseObj.book_name} ${verseObj.chapter} ${label} ${verseObj.verse}`;
         const contentDisplay = document.getElementById('content-display');
         if (contentDisplay) {
             contentDisplay.innerHTML = `<strong>${visualReference}</strong><br><br>${flagString}${verseObj.text}`;
         }
     };
 
-    let prefix;
+    let ttsPrefix;
     if (customPrefix !== null) {
-        prefix = customPrefix;
+        ttsPrefix = customPrefix;
         lastAnnouncedBook = verseObj.book_name;
         lastAnnouncedChapter = verseObj.chapter;
     } else if (activeReadMode === 'book') {
         // In book/literature mode, speak only the raw text — no verse or chapter labels.
-        prefix = '';
+        ttsPrefix = '';
         lastAnnouncedBook = verseObj.book_name;
         lastAnnouncedChapter = verseObj.chapter;
     } else {
         if (forceFull || verseObj.book_name !== lastAnnouncedBook) {
-            prefix = `${verseObj.book_name} chapter ${verseObj.chapter}, verse ${verseObj.verse}: `;
+            ttsPrefix = `${verseObj.book_name} chapter ${verseObj.chapter}, verse ${verseObj.verse}: `;
         } else if (verseObj.chapter !== lastAnnouncedChapter) {
-            prefix = `Chapter ${verseObj.chapter}, verse ${verseObj.verse}: `;
+            ttsPrefix = `Chapter ${verseObj.chapter}, verse ${verseObj.verse}: `;
         } else {
-            prefix = `${verseObj.verse}: `;
+            ttsPrefix = `${verseObj.verse}: `;
         }
         lastAnnouncedBook = verseObj.book_name;
         lastAnnouncedChapter = verseObj.chapter;
@@ -309,7 +311,7 @@ export function readCurrentVerse(forceFull = false, customPrefix = null) {
     // Initial visual render uses synchronous flags; link flag is resolved from note content below.
     renderVisualVerse(false);
 
-    speak(prefix + verseObj.text);
+    speak(ttsPrefix + verseObj.text);
 
     if (!db) return;
     const curriculumId = (verseObj.book_number * 1000000) + (verseObj.chapter * 1000) + verseObj.verse;
@@ -479,8 +481,8 @@ export function getKeyboardExplorerDescription(event) {
     if (key === '?') return 'Question mark: Open Help Menu.';
     if (key === 'ArrowLeft') return 'Left Arrow: Move to previous verse.';
     if (key === 'ArrowRight') return 'Right Arrow: Move to next verse.';
-    if (key === 'ArrowUp') return event.shiftKey ? 'Shift plus Up Arrow: Read expert commentary.' : 'Up Arrow: Read the current verse note.';
-    if (key === 'ArrowDown') return 'Down Arrow: Open Verse Menu.';
+    if (key === 'ArrowUp') return 'Up Arrow: Read the current verse note.';
+    if (key === 'ArrowDown') return 'Down Arrow: Native vertical scroll.';
     if (key === 'PageUp') return event.shiftKey ? 'Shift plus Page Up: Move to previous book.' : 'Page Up: Move to previous chapter.';
     if (key === 'PageDown') return event.shiftKey ? 'Shift plus Page Down: Move to next book.' : 'Page Down: Move to next chapter.';
     if (key === 'Tab') return 'Tab: Read full current location.';
@@ -495,6 +497,7 @@ export function getKeyboardExplorerDescription(event) {
     if (keyUpper === 'F') return 'F: Start Word search mode.';
     if (keyUpper === 'C') return 'C: Start Chapter jump mode.';
     if (keyUpper === 'V') return event.shiftKey ? 'Shift plus V: Cycle ambient volume.' : 'V: Start Verse jump mode.';
+    if (keyUpper === 'U') return 'U: Open Verse Menu.';
     if (keyUpper === 'M') return 'M: Open note editor for this verse.';
     if (keyUpper === 'H') return 'H: Open Audio Codex tutorial overlay.';
     if (keyUpper === 'R') return 'R: Anchor this verse for relational linking.';

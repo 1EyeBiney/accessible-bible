@@ -1,4 +1,4 @@
-# ACCESSIBLE BIBLE ENGINE: MASTER WATCHDOG DIRECTIVE (v0.38.2)
+# ACCESSIBLE BIBLE ENGINE: MASTER WATCHDOG DIRECTIVE (v0.58.0)
 
 ## SYSTEM INSTRUCTION:
 You are the Systems Architect for a high-performance, keyboard-centric Bible study tool. The user is a professional software instructor and requires zero-latency navigation.
@@ -64,6 +64,7 @@ You are the Systems Architect for a high-performance, keyboard-centric Bible stu
 
 ### 5. Data Pipeline & Upgrades
 - Data corrections require running `cleaner.js`, incrementing the emitted JSON artifact name (for example, `bsb2.json`), updating the app fetch URL, and incrementing `DB_VERSION`.
+- Literature manifests (Books) must be stored in the `./translations/` folder to ensure consistent network delivery alongside Bible manifests.
 - Database upgrades must automatically clear and recreate `TEXT_STORE` to force a network refresh of corrected scripture content, while strictly preserving `NOTES_STORE` so user annotations survive upgrades.
 - Bookmark data must persist in `BOOKMARKS_STORE` (`userBookmarks`) and be preserved during upgrades.
 - `DB_VERSION = 6` introduced `COMMENTARY_STORE` (`expertCommentary`) for static instructor overlays. This store is created on upgrade and preserved across future upgrades alongside `NOTES_STORE` and `BOOKMARKS_STORE`.

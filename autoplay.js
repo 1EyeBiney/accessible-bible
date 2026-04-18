@@ -3,6 +3,7 @@ import { memoryCache, currentVerseIndex, silentVisualUpdate, activeReadMode } fr
 export let isAutoPlaying = false;
 let activeUtterances = [];
 let audioCtx = null;
+let autoPlayStartTime = 0;
 
 // Settings State
 const savedSettings = JSON.parse(localStorage.getItem('autoPlaySettings'));
@@ -11,7 +12,7 @@ export const autoPlaySettings = savedSettings || {
     voiceIndex: 0,
     rate: 1.0,
     postFocus: 0,
-    unit: 0, // 0: Verses, 1: Chapters, 2: Books
+    unit: 0, // 0: Verses, 1: Chapters, 2: Books, 3: Minutes
     amount: 0 // Index for [End of Current, 1, 2, 3, 4, 5, 10, 15, 25, 50]
 };
 // Ensure fallback if old localStorage doesn't have unit/amount
@@ -158,6 +159,7 @@ export function startAutoPlay() {
 
     startingVerseIndex = currentVerseIndex;
     isAutoPlaying = true;
+    autoPlayStartTime = Date.now();
     queueRemainingVerses(currentVerseIndex);
 }
 
@@ -196,6 +198,10 @@ function queueRemainingVerses(startIndex) {
                 if (boundaryCount >= N) { endIndex = i; break; }
             }
         }
+    } else if (autoPlaySettings.unit === 3) { // Minutes
+        // Time-based mode runs continuously by default. Amount 0 ("End of Current")
+        // is treated as continuous playback with no timer cap.
+        endIndex = memoryCache.length;
     }
 
     for (let i = startIndex; i < endIndex; i++) {
@@ -244,6 +250,16 @@ function queueRemainingVerses(startIndex) {
         };
 
         utterance.onend = function() {
+            if (isAutoPlaying && autoPlaySettings.unit === 3 && autoPlaySettings.amount > 0) {
+                const targetMinutes = amountVals[autoPlaySettings.amount];
+                const elapsedMs = Date.now() - autoPlayStartTime;
+                if (targetMinutes > 0 && elapsedMs >= (targetMinutes * 60000)) {
+                    playAutoPlayUI('stop');
+                    stopAutoPlay();
+                    return;
+                }
+            }
+
             if (autoPlaySettings.transition === 0 && i < endIndex - 1 && isAutoPlaying) {
                 playChime();
             }

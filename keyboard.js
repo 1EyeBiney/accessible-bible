@@ -97,6 +97,9 @@ export let currentSearchResultIndex = -1;
 export let consecutiveSearchJumps = 0;
 export let menuOptions = [];
 export let currentMenuIndex = 0;
+export const jumpAmounts = [10, 30, 60, 300, 900, 3600];
+export let currentJumpAmountIndex = 1;
+export let hasHeardJumpInstructions = false;
 
 export function clearAllModes() {
     isBookSearchMode = false; isChapterMode = false; isVerseMode = false;
@@ -126,7 +129,7 @@ export function setCurrentSearchResultIndex(val) { currentSearchResultIndex = va
 function getAutoPlayMenuString(index) {
     const transitions = ["Chime", "Numbers", "Seamless"];
     const postFocus = ["Stay at stopped verse", "Return to start"];
-    const units = ["Verses", "Chapters", "Books"];
+    const units = ["Verses", "Chapters", "Books", "Minutes"];
     const amountVals = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 50];
     const amountLabels = ["End of Current", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "15", "20", "25", "50"];
     const voiceName = curatedVoices[autoPlaySettings.voiceIndex]?.display || "Loading...";
@@ -360,7 +363,7 @@ export function handleInput(event) {
             } else if (currentMenuIndex === 3) {
                 autoPlaySettings.postFocus = (autoPlaySettings.postFocus + delta + 2) % 2;
             } else if (currentMenuIndex === 4) {
-                autoPlaySettings.unit = (autoPlaySettings.unit + delta + 3) % 3;
+                autoPlaySettings.unit = (autoPlaySettings.unit + delta + 4) % 4;
             } else if (currentMenuIndex === 5) {
                 autoPlaySettings.amount = (autoPlaySettings.amount + delta + 15) % 15;
             }
@@ -435,6 +438,7 @@ export function handleInput(event) {
                         return res.json();
                     })
                     .then(data => {
+                        setActiveReadMode("book");
                         booksManifest = data;
                         currentBooksIndex = 0;
                         setActiveMenu('books');
@@ -792,7 +796,12 @@ export function handleInput(event) {
     // --- Tab: 'Where Am I?' ---
     if (key === 'Tab') {
         event.preventDefault();
-        readCurrentVerse(true);
+        if (activeReadMode === 'book' && memoryCache.length > 0) {
+            const pct = Math.round(((currentVerseIndex + 1) / memoryCache.length) * 100);
+            speak(`Paragraph ${currentVerseIndex + 1} of ${memoryCache.length}. ${pct} percent completed.`);
+        } else {
+            readCurrentVerse(true);
+        }
         return;
     }
 
@@ -814,18 +823,6 @@ export function handleInput(event) {
                 updateVisualBuffer("PERSONAL NOTE", "No personal note.");
             }
         };
-        return;
-    }
-
-    if (key === 'ArrowDown') {
-        event.preventDefault();
-        clearAllModes();
-        isOptionsMenuMode = true;
-        menuOptions = ['Edit Note', 'Delete Note', 'Copy Verse'];
-        currentMenuIndex = 0;
-        currentMenuTitle = "VERSE MENU";
-        renderMenuVisuals(currentMenuTitle, menuOptions, currentMenuIndex);
-        speak("Verse Menu. 1 of 3: Edit Note. Up and down to navigate, Enter to select, Escape to cancel.");
         return;
     }
 
@@ -950,6 +947,72 @@ export function handleInput(event) {
         return;
     }
 
+    // --- Chronos Auto Jump Engine ---
+    if (event.shiftKey && ["ARROWUP", "ARROWDOWN", "ARROWLEFT", "ARROWRIGHT"].includes(keyUpper)) {
+        event.preventDefault();
+        if (!isReady || memoryCache.length === 0) return;
+
+        // Cycle Jump Amounts
+        if (keyUpper === "ARROWUP" || keyUpper === "ARROWDOWN") {
+            const dir = keyUpper === "ARROWUP" ? 1 : -1;
+            currentJumpAmountIndex = (currentJumpAmountIndex + dir + jumpAmounts.length) % jumpAmounts.length;
+            const sec = jumpAmounts[currentJumpAmountIndex];
+            let timeLabel = sec + " seconds";
+            if (sec === 60) timeLabel = "1 minute";
+            if (sec === 300) timeLabel = "5 minutes";
+            if (sec === 900) timeLabel = "15 minutes";
+            if (sec === 3600) timeLabel = "1 hour";
+
+            let instruction = "";
+            if (!hasHeardJumpInstructions) {
+                instruction = ". Press Shift plus Right Arrow to jump forward, and Shift plus Left Arrow to jump backward.";
+                hasHeardJumpInstructions = true;
+            }
+            speak(`Jump amount ${timeLabel}${instruction}`);
+            return;
+        }
+
+        // Execute Time Jump
+        if (keyUpper === "ARROWLEFT" || keyUpper === "ARROWRIGHT") {
+            const isForward = keyUpper === "ARROWRIGHT";
+            const wpm = 150 * autoPlaySettings.rate;
+            const targetWords = Math.round((wpm / 60) * jumpAmounts[currentJumpAmountIndex]);
+            let wordsCounted = 0;
+            let newIndex = currentVerseIndex;
+
+            while (wordsCounted < targetWords) {
+                if (isForward) {
+                    if (newIndex >= memoryCache.length - 1) break;
+                    newIndex++;
+                } else {
+                    if (newIndex <= 0) break;
+                    newIndex--;
+                }
+                wordsCounted += memoryCache[newIndex].text.trim().split(/\s+/).length;
+            }
+
+            const wasPlaying = isAutoPlaying;
+            if (wasPlaying) {
+                pauseAutoPlay();
+            }
+
+            updateVerseIndex(newIndex);
+            clearVisualBuffer();
+
+            const sec = jumpAmounts[currentJumpAmountIndex];
+            let timeLabel = sec < 60 ? sec + " seconds" : (sec / 60) + " minutes";
+            if (sec === 3600) timeLabel = "1 hour";
+
+            const prefix = isForward ? `Fast forwarded ${timeLabel}. ` : `Rewound ${timeLabel}. `;
+            readCurrentVerse(false, prefix);
+
+            if (wasPlaying) {
+                setTimeout(startAutoPlay, 500); // Resume if it was active
+            }
+            return;
+        }
+    }
+
     // --- Standard Key Routing ---
     switch(keyUpper) {
         case 'ARROWRIGHT':
@@ -1003,6 +1066,16 @@ export function handleInput(event) {
         case 'M':
             event.preventDefault();
             openNoteEditorForCurrentVerse();
+            break;
+        case 'U':
+            event.preventDefault();
+            clearAllModes();
+            isOptionsMenuMode = true;
+            menuOptions = ['Edit Note', 'Delete Note', 'Copy Verse'];
+            currentMenuIndex = 0;
+            currentMenuTitle = "VERSE MENU";
+            renderMenuVisuals(currentMenuTitle, menuOptions, currentMenuIndex);
+            speak("Verse Menu. 1 of 3: Edit Note. Up and down to navigate, Enter to select, Escape to cancel.");
             break;
         case 'H':
             event.preventDefault();
