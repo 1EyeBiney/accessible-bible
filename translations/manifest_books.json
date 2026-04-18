@@ -2,11 +2,26 @@
   {
     "title": "The Story of My Life",
     "description": "The autobiography of Helen Keller.",
-    "filename": "keller_ab.json"
+    "filename": "keller_life_ab.json"
+  },
+  {
+    "title": "The World I Live In",
+    "description": "Helen Keller's profound essays on her sensory experiences.",
+    "filename": "keller_world_ab.json"
   },
   {
     "title": "The Pilgrim's Progress",
     "description": "John Bunyan's classic spiritual allegory of the Christian journey.",
     "filename": "pilgrims_progress.json"
+  },
+  {
+    "title": "A Connecticut Yankee in King Arthur's Court",
+    "description": "Mark Twain's classic satirical time-travel novel.",
+    "filename": "twain_yankee_ab.json"
+  },
+  {
+    "title": "Twenty Thousand Leagues under the Sea",
+    "description": "Jules Verne's classic sci-fi underwater adventure.",
+    "filename": "verne_league_ab.json"
   }
 ]
