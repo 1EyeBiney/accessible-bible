@@ -821,6 +821,11 @@ export function handleInput(event) {
     if (key === 'ArrowUp' && !event.shiftKey) {
         event.preventDefault();
         if (!isReady || !db) return;
+        if (activeReadMode === 'book') {
+            speak("Notes are disabled in Book mode.");
+            updateVisualBuffer("PERSONAL NOTE", "Notes are disabled in Book mode.");
+            return;
+        }
         const curVerse = memoryCache[currentVerseIndex];
 
         const tx = db.transaction([NOTES_STORE], "readonly");
@@ -1075,6 +1080,10 @@ export function handleInput(event) {
         case 'Y':
             event.preventDefault();
             if (!isReady || !db) break;
+            if (activeReadMode === 'book') {
+                speak("Commentary is disabled in Book mode.");
+                break;
+            }
             {
                 const curVerse = memoryCache[currentVerseIndex];
                 const curriculumId = (curVerse.book_number * 1000000) + (curVerse.chapter * 1000) + curVerse.verse;
@@ -1099,10 +1108,24 @@ export function handleInput(event) {
             break;
         case 'M':
             event.preventDefault();
+            if (activeReadMode === 'book') {
+                speak("Notes are disabled in Book mode.");
+                break;
+            }
             openNoteEditorForCurrentVerse();
             break;
         case 'U':
             event.preventDefault();
+            if (activeReadMode === 'book') {
+                const v = memoryCache[currentVerseIndex];
+                const fullText = v.book_name + " Chapter " + v.chapter + " Paragraph " + v.verse + " - " + v.text;
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(fullText).then(() => speak("Paragraph copied to clipboard."));
+                } else {
+                    speak("Clipboard error.");
+                }
+                break;
+            }
             clearAllModes();
             isOptionsMenuMode = true;
             menuOptions = ['Edit Note', 'Delete Note', 'Copy Verse'];
