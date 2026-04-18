@@ -430,15 +430,22 @@ export function handleInput(event) {
             }
             if (selected === 'Books') {
                 fetch('./translations/manifest_books.json', { cache: 'no-store' })
-                    .then(res => res.json())
+                    .then(res => {
+                        if (!res.ok) throw new Error('Fetch failed');
+                        return res.json();
+                    })
                     .then(data => {
                         booksManifest = data;
                         currentBooksIndex = 0;
                         setActiveMenu('books');
+                        // Use standard mapping for Bible-formatted manifests
                         const displayItems = booksManifest.map(i => `<strong>${i.title}</strong><br><span style="font-size: 1.2rem; opacity: 0.9;">${i.description}</span>`);
-                        renderMenuVisuals("BOOKS", displayItems, currentBooksIndex);
+                        renderMenuVisuals("BOOKS", displayItems, 0);
                         speak(`Books. 1 of ${booksManifest.length}. ${booksManifest[0].title}.`);
-                    }).catch(() => speak("Failed to load books manifest."));
+                    }).catch(err => {
+                        console.error(err);
+                        speak("Failed to load books manifest from the translations path.");
+                    });
                 return;
             }
         }
