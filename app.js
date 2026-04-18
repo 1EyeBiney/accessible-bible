@@ -52,7 +52,7 @@ const onTrackEnded = () => playNextTrack();
 
 // --- Library & Read Mode State ---
 export let activeMenu = null; // Can be null, 'library', 'bibles', 'books', or 'commentaries'
-export let activeReadMode = 'bible'; // Can be 'bible' or 'book'
+export let activeReadMode = localStorage.getItem('activeReadMode') || 'bible';
 export const libraryOptions = ['Commentaries', 'Bibles', 'Books'];
 export let currentLibraryIndex = 0;
 
@@ -837,6 +837,7 @@ export async function fetchAndLoadCommentary(filename) {
 export function fetchAndLoadBible(filename, mode = 'bible') {
     speak("Downloading translation...");
     activeReadMode = mode;
+    localStorage.setItem('activeReadMode', mode);
     // 1. Fetch the data FIRST, before opening any IndexedDB transaction
     fetch(`./translations/${filename}`)
         .then(response => {

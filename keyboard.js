@@ -798,7 +798,8 @@ export function handleInput(event) {
         event.preventDefault();
         if (activeReadMode === 'book' && memoryCache.length > 0) {
             const pct = Math.round(((currentVerseIndex + 1) / memoryCache.length) * 100);
-            speak(`Paragraph ${currentVerseIndex + 1} of ${memoryCache.length}. ${pct} percent completed.`);
+            const currentChap = memoryCache[currentVerseIndex].chapter;
+            speak(`Chapter ${currentChap}. ${pct} percent completed.`);
         } else {
             readCurrentVerse(true);
         }
@@ -806,7 +807,7 @@ export function handleInput(event) {
     }
 
     // --- Vertical Readout (Personal Note) ---
-    if (key === 'ArrowUp') {
+    if (key === 'ArrowUp' && !event.shiftKey) {
         event.preventDefault();
         if (!isReady || !db) return;
         const curVerse = memoryCache[currentVerseIndex];
