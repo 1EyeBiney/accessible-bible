@@ -90,7 +90,15 @@ export function loadBookmarks(callback) {
     const store = tx.objectStore(BOOKMARKS_STORE);
     const req = store.getAll();
     req.onsuccess = () => {
-        bookmarksCache = req.result.map(b => b.id).sort((a, b) => a - b);
+        // Create a fast lookup Set of all valid IDs in the currently loaded text
+        const currentValidIds = new Set(memoryCache.map(v => v.id));
+        
+        // Only load bookmarks that actually exist in this document
+        bookmarksCache = req.result
+            .map(b => b.id)
+            .filter(id => currentValidIds.has(id))
+            .sort((a, b) => a - b);
+            
         if (callback) callback();
     };
 }

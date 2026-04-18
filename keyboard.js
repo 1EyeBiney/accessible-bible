@@ -97,7 +97,7 @@ export let currentSearchResultIndex = -1;
 export let consecutiveSearchJumps = 0;
 export let menuOptions = [];
 export let currentMenuIndex = 0;
-export const jumpAmounts = [10, 30, 60, 300, 900, 3600];
+export const jumpAmounts = ['10s', '30s', '1m', '5m', '15m', '1%', '5%', '10%'];
 export let currentJumpAmountIndex = 1;
 export let hasHeardJumpInstructions = false;
 
@@ -783,11 +783,22 @@ export function handleInput(event) {
         }
         const v = memoryCache[currentVerseIndex];
         let prefix = "";
-        if (consecutiveSearchJumps === 0) {
-            prefix = `Match ${currentSearchResultIndex + 1} of ${searchResults.length}: ${v.book_name} chapter ${v.chapter}, verse ${v.verse} - `;
+
+        if (activeReadMode === 'book') {
+            const pct = Math.round(((currentVerseIndex + 1) / memoryCache.length) * 100);
+            if (consecutiveSearchJumps === 0) {
+                prefix = `Match ${currentSearchResultIndex + 1} of ${searchResults.length}. Chapter ${v.chapter}, ${pct} percent completed. `;
+            } else {
+                prefix = `${currentSearchResultIndex + 1}. Chapter ${v.chapter}, ${pct} percent. `;
+            }
         } else {
-            prefix = `${currentSearchResultIndex + 1}: ${v.book_name} chapter ${v.chapter}, verse ${v.verse} - `;
+            if (consecutiveSearchJumps === 0) {
+                prefix = `Match ${currentSearchResultIndex + 1} of ${searchResults.length}: ${v.book_name} chapter ${v.chapter}, verse ${v.verse} - `;
+            } else {
+                prefix = `${currentSearchResultIndex + 1}: ${v.book_name} chapter ${v.chapter}, verse ${v.verse} - `;
+            }
         }
+
         consecutiveSearchJumps++;
         speak(prefix + v.text);
         return;
@@ -957,12 +968,15 @@ export function handleInput(event) {
         if (keyUpper === "ARROWUP" || keyUpper === "ARROWDOWN") {
             const dir = keyUpper === "ARROWUP" ? 1 : -1;
             currentJumpAmountIndex = (currentJumpAmountIndex + dir + jumpAmounts.length) % jumpAmounts.length;
-            const sec = jumpAmounts[currentJumpAmountIndex];
-            let timeLabel = sec + " seconds";
-            if (sec === 60) timeLabel = "1 minute";
-            if (sec === 300) timeLabel = "5 minutes";
-            if (sec === 900) timeLabel = "15 minutes";
-            if (sec === 3600) timeLabel = "1 hour";
+            const val = jumpAmounts[currentJumpAmountIndex];
+            
+            let timeLabel = val;
+            if (val === '10s') timeLabel = "10 seconds";
+            if (val === '30s') timeLabel = "30 seconds";
+            if (val === '1m') timeLabel = "1 minute";
+            if (val === '5m') timeLabel = "5 minutes";
+            if (val === '15m') timeLabel = "15 minutes";
+            if (val.includes('%')) timeLabel = val.replace('%', ' percent');
 
             let instruction = "";
             if (!hasHeardJumpInstructions) {
@@ -976,40 +990,59 @@ export function handleInput(event) {
         // Execute Time Jump
         if (keyUpper === "ARROWLEFT" || keyUpper === "ARROWRIGHT") {
             const isForward = keyUpper === "ARROWRIGHT";
-            const wpm = 150 * autoPlaySettings.rate;
-            const targetWords = Math.round((wpm / 60) * jumpAmounts[currentJumpAmountIndex]);
-            let wordsCounted = 0;
+            const val = jumpAmounts[currentJumpAmountIndex];
             let newIndex = currentVerseIndex;
 
-            while (wordsCounted < targetWords) {
+            if (val.includes('%')) {
+                // Absolute Percentage Math
+                const pct = parseInt(val.replace('%', ''), 10);
+                const jumpCount = Math.max(1, Math.round(memoryCache.length * (pct / 100)));
                 if (isForward) {
-                    if (newIndex >= memoryCache.length - 1) break;
-                    newIndex++;
+                    newIndex = Math.min(memoryCache.length - 1, currentVerseIndex + jumpCount);
                 } else {
-                    if (newIndex <= 0) break;
-                    newIndex--;
+                    newIndex = Math.max(0, currentVerseIndex - jumpCount);
                 }
-                wordsCounted += memoryCache[newIndex].text.trim().split(/\s+/).length;
+            } else {
+                // Estimated Time Math (Anti-Freeze Optimization)
+                let seconds = 0;
+                if (val.endsWith('s')) seconds = parseInt(val.replace('s', ''), 10);
+                if (val.endsWith('m')) seconds = parseInt(val.replace('m', ''), 10) * 60;
+
+                const wpm = 150 * autoPlaySettings.rate;
+                const targetWords = Math.round((wpm / 60) * seconds);
+                let wordsCounted = 0;
+
+                while (wordsCounted < targetWords) {
+                    if (isForward) {
+                        if (newIndex >= memoryCache.length - 1) break;
+                        newIndex++;
+                    } else {
+                        if (newIndex <= 0) break;
+                        newIndex--;
+                    }
+                    const charLength = memoryCache[newIndex].text.trim().length;
+                    wordsCounted += Math.max(1, Math.round(charLength / 6));
+                }
             }
 
             const wasPlaying = isAutoPlaying;
-            if (wasPlaying) {
-                pauseAutoPlay();
-            }
+            if (wasPlaying) pauseAutoPlay();
 
             updateVerseIndex(newIndex);
             clearVisualBuffer();
 
-            const sec = jumpAmounts[currentJumpAmountIndex];
-            let timeLabel = sec < 60 ? sec + " seconds" : (sec / 60) + " minutes";
-            if (sec === 3600) timeLabel = "1 hour";
+            let timeLabel = val;
+            if (val === '10s') timeLabel = "10 seconds";
+            if (val === '30s') timeLabel = "30 seconds";
+            if (val === '1m') timeLabel = "1 minute";
+            if (val === '5m') timeLabel = "5 minutes";
+            if (val === '15m') timeLabel = "15 minutes";
+            if (val.includes('%')) timeLabel = val.replace('%', ' percent');
 
             const prefix = isForward ? `Fast forwarded ${timeLabel}. ` : `Rewound ${timeLabel}. `;
             readCurrentVerse(false, prefix);
 
-            if (wasPlaying) {
-                setTimeout(startAutoPlay, 500); // Resume if it was active
-            }
+            if (wasPlaying) setTimeout(startAutoPlay, 500);
             return;
         }
     }

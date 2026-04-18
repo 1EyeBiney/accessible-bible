@@ -195,11 +195,22 @@ export function navigateBookmarks(direction) {
     }
     const v = memoryCache[currentVerseIndex];
     let customPrefix = "";
-    if (consecutiveBookmarkJumps === 0) {
-        customPrefix = `Bookmark ${currentBookmarkIndex + 1} of ${bookmarksCache.length}: ${v.book_name} chapter ${v.chapter}, verse ${v.verse} - `;
+
+    if (activeReadMode === 'book') {
+        const pct = Math.round(((currentVerseIndex + 1) / memoryCache.length) * 100);
+        if (consecutiveBookmarkJumps === 0) {
+            customPrefix = `Bookmark ${currentBookmarkIndex + 1} of ${bookmarksCache.length}. Chapter ${v.chapter}, ${pct} percent completed. `;
+        } else {
+            customPrefix = `${currentBookmarkIndex + 1}. Chapter ${v.chapter}, ${pct} percent. `;
+        }
     } else {
-        customPrefix = `${currentBookmarkIndex + 1}: ${v.book_name} chapter ${v.chapter}, verse ${v.verse} - `;
+        if (consecutiveBookmarkJumps === 0) {
+            customPrefix = `Bookmark ${currentBookmarkIndex + 1} of ${bookmarksCache.length}: ${v.book_name} chapter ${v.chapter}, verse ${v.verse} - `;
+        } else {
+            customPrefix = `${currentBookmarkIndex + 1}: ${v.book_name} chapter ${v.chapter}, verse ${v.verse} - `;
+        }
     }
+
     consecutiveBookmarkJumps++;
 
     readCurrentVerse(false, customPrefix);
