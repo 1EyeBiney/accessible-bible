@@ -1,147 +1,31 @@
-Searched codebase for "tRole: Senior Systems Architect
-Role: Senior Systems Architect
-Context Update: We have completed the Sandbox stress testing (Probes 1.1 through 1.4) for the JIT Study Plan feature of the "Accessible Bible." We are ready to transition from sandbox testing to architectural implementation.
-What We Accomplished (Failure Envelope Mapping):
-Hard Safety Blocks: Confirmed that hard safety triggers result in HTTP errors with clear 'SAFETY' reasons in the response feedback.
-Contextual Safety: Confirmed the model can handle sensitive topics (e.g., depression) while maintaining JSON schema integrity, provided the temperature and schema are strictly enforced.
-Parsing Failures: Confirmed that non-JSON output (e.g., hallucinations or refusals) crashes the JSON.parse() layer, requiring a "Garbage Collector" wrapper in our production pipeline.
-Network Errors: Confirmed that transient server errors (e.g., 503 Service Unavailable) require a retry strategy.
-The Current Need:
-We are transitioning to Update Cycle 2: Security & Provider Plumbing. We need to build a robust GeminiProvider class that handles these failure modes gracefully. 
-Architectural Guidance Requested:
-Error Class Hierarchy: How should we structure our error handling? Should we implement a custom Error Class hierarchy (e.g., 'SafetyError', 'NetworkError', 'ParsingError') to map API failures to our hand-authored, screen-reader-friendly audio messages?
-The "Graceful Degradation" Pattern: Given our accessibility-first constraints, what is the best pattern to ensure the UI never encounters raw JSON parsing errors? Is a middleware/wrapper approach standard here?
-Provider Architecture: We are planning to build a GeminiProvider class. Should this include the validation logic (fuzzy-matching the verse snippets) internally, or should that remain a separate service?
-Transition: We believe we have sufficient data to move away from testing and into building. Do you agree, or is there a high-risk failure mode we have overlooked before we commit to the frontend architecture?Context Update: > We are following up on your architectural review for the "Accessible Bible" JIT Study Plan feature. We have successfully built a local Node.js sandbox to test the pipeline before integrating it into our main client-side JavaScript engine.
-What We Have Accomplished in the Sandbox:
-BYOK Security Verified: We successfully implemented local .env environment variables to read the API key, proving the foundational concept for our future IndexedDB API_KEYS_STORE.
-2. 
-Model Selection: We are utilizing gemini-2.5-flash for high-speed, low-cost generation.
-3. 
-Strict Schema Enforcement: We used Google's responseSchema to force the AI to return raw JSON. The test completely eliminated conversational markdown (no "Here is your JSON" wrappers), meaning the output is immediately JSON.parse() ready.
-4. 
-Implemented Your Validation Suggestion: We updated the schema to require an expected_text_snippet (5-7 words of the actual verse) for every node. The AI successfully generated accurate snippets (e.g., "Cast all your anxiety on him" for 1 Peter 5:7).
-5. 
-Successful Output: We passed the topic "struggling with anxiety" with the filter "Charles Spurgeon". The model returned a perfect 3-node array with accurate references, strict adherence to the 600-character commentary limit, and the requested theological tone.
-The Strategic Question:
-Our core "happy path" plumbing works perfectly in the sandbox. We are now debating our immediate next steps. Should we:
-• 
-Path A (Stress Test First): Stay in the sandbox and heavily stress-test edge cases. Specifically, feeding it high-risk topics (to trigger safety refusals) and bizarre constraints to see how the schema holds up, so we know exactly what error payloads look like before writing the frontend error handlers.
-• 
-Path B (Plumbing First): Take the current successful schema and begin building the client-side architecture (the IndexedDB key vault, the fuzzy-matching text validator, and the screen-reader redaction UI).
-Given our accessibility-first constraints, how would you prioritize the immediate next steps? Are there specific edge-case prompts we must run in the sandbox before committing this schema to the frontend?", 13 results. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.output.txt, c:\nbs\abible\.roadmap.txt, c:\nbs\abible\.todo.txt, c:\nbs\abible\app.js, c:\nbs\abible\data\build_commentaries.js, c:\nbs\abible\data\build_commentaries.js, c:\nbs\abible\data\cleaner.js, c:\nbs\abible\gemini.md, c:\nbs\abible\gemini.md, c:\nbs\abible\gemini.md, c:\nbs\abible\gemini.md, c:\nbs\abible\test_gemini.js
-Update Cycle 2: Security & Provider Plumbing
-You have enough data. Move forward — but build in this specific order, and heed the one failure mode I think you've under-weighted.
-1. Error Class Hierarchy — Yes, but Keep It Flat
-A custom hierarchy is the right call specifically because your terminal output for every error is hand-authored TTS. You need a discriminated type the announcement layer can switch on without sniffing string contents.
-But resist the urge to build a deep tree. Three levels max, and most cases live at level 2.
-```
-// Base — never thrown directly, just for instanceof checks
-class StudyPlanError extends Error {
-  constructor(message, { userMessage, recoverable, cause } = {}) {
-    super(message);
-    this.name = this.constructor.name;
-    this.userMessage = userMessage;   // hand-authored, TTS-ready
-    this.recoverable = recoverable;   // can the user retry?
-    this.cause = cause;               // original error/payload
-  }
+PS C:\nbs\abible> node test_sensit
+ivity.js
+node:internal/modules/cjs/loader:1459
+  throw err;
+  ^
+Error: Cannot find module 'C:\nbs\abible\test_sensitivity.js'       
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1456:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1066:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1071:22)
+    at Module._load (node:internal/modules/cjs/loader:1242:25)      
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)     
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+    at node:internal/main/run_main_module:33:47 {
+  code: 'MODULE_NOT_FOUND',       
+  requireStack: []
 }
-// Level 2 — what the announcer switches on
-class SafetyError      extends StudyPlanError {}  // blocked by Gemini
-class NetworkError     extends StudyPlanError {}  // 5xx, timeout, offline
-class AuthError        extends StudyPlanError {}  // 401/403/bad key
-class QuotaError       extends StudyPlanError {}  // 429
-class ParsingError     extends StudyPlanError {}  // JSON.parse failed
-class ValidationError  extends StudyPlanError {}  // passed parse, failed manifest/fuzzy/coverage
-class SchemaError      extends StudyPlanError {}  // shape wrong (missing fields, wrong types)
-```
-Why this shape works for accessibility:
-**`userMessage` is mandatory at construction.** You cannot throw an error without authoring its spoken sentence. This forces good UX at the throw site, not the catch site.
-**`recoverable` drives announcement suffix.** If true, append `"Press Enter to retry."`; if false, append `"Press Escape to return to study mode."` Consistent verbal affordances.
-**No deep inheritance.** A sighted dev's instinct is to subclass `NetworkError` into `TimeoutError` and `DnsError`. Don't. The user can't tell the difference and shouldn't have to. If you need finer granularity for logging, put it in a `code` field, not a subclass.
-Mapping table — keep this in the GeminiProvider file
-Probe outcome Error class userMessage recoverable
-promptFeedback.blockReason set SafetyError "This topic was outside the model's response range. Try rephrasing, or press L for the standard library." true
-finishReason: SAFETY mid-stream SafetyError "The plan was stopped partway through for safety reasons. Try a gentler phrasing." true
-finishReason: MAX_TOKENS ParsingError w/ partial "The plan was cut short. Try a narrower topic." true
-JSON.parse throws ParsingError "The response was not in a usable format." true
-HTTP 401/403 AuthError "Your API key was rejected. Press O to open Options." false
-HTTP 429 QuotaError "Rate limit reached. Try again in a moment." true
-HTTP 5xx NetworkError "The AI service is temporarily unavailable." true
-fetch rejects NetworkError "Could not reach the AI service. Check your connection." true
-<60% nodes survived validation ValidationError "Too many references could not be verified. Try again." true
-That table is your contract. Once written, it doesn't change often, and every new failure mode forces an explicit row addition — which is the right friction to have.
-2. Graceful Degradation — Single Choke Point, Not Middleware
-"Middleware" is overkill for a client-side app with one provider. What you actually want is a single async function that is the only path between the engine and the AI, and which is contractually guaranteed to either return a validated plan or throw a StudyPlanError. Never anything else. Never raw exceptions. Never undefined.
-```
-// The only function the rest of the app calls.
-async function generateStudyPlan(topic, filter, { signal } = {}) {
-  try {
-    const raw      = await provider.generate(topic, filter, { signal });
-    const parsed   = parseWithRepair(raw);          // → ParsingError or obj
-    const coerced  = coerceSchema(parsed);          // → SchemaError or obj
-    const validated = await validatePlan(coerced);   // → ValidationError or plan
-    return validated;
-  } catch (err) {
-    if (err instanceof StudyPlanError) throw err;
-    // Unknown error → wrap, never leak
-    throw new StudyPlanError("Unexpected error", {
-      userMessage: "Something went wrong. Please try again.",
-      recoverable: true,
-      cause: err
-    });
-  }
+Node.js v24.14.1
+PS C:\nbs\abible> node test_sensitivity.js
+⏳ Running Semantic Safety Catch Tests...
+Failed to run tests: Error: ENOENT: no such file or directory, open 'C:\nbs\abible\sensitivity_fixtures.json'
+    at Object.readFileSync (node:fs:440:20)
+    at file:///C:/nbs/abible/test_sensitivity.js:12:24
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)  
+esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\nbs\\abible\\sensitivity_fixtures.json'
 }
-```
-This pattern gives you three properties that matter for accessibility:
-**The catch-all wrapper at the bottom is non-negotiable.** A raw exception that escapes this function will eventually reach your global handler and *something* will get spoken — possibly the unredacted error message including stack traces or, worse, the API key if it's in the `cause` chain. The wrapper guarantees that never happens.
-**No partial state escapes.** If validation fails on plan #5, plan #5 never enters `memoryCache`. The engine's invariants stay intact.
-**The announcement layer has exactly one job:** `catch (err) { if (err instanceof StudyPlanError) announce(err.userMessage); }`. Trivial. Testable in isolation.
-Crucially: scrub err.cause before any logging. The original Gemini response may contain echoed user input, the API key in a Authorization header debug dump, or PII. Add a sanitize() step inside the wrapper that strips known sensitive keys before the error object is ever stored or surfaced.
-3. Provider Architecture — Separation of Concerns
-Validation does NOT belong in `GeminiProvider`. Keep them separate. This is one of the few places I'd be firm.
-Why separation matters here
-GeminiProvider's single responsibility: Gemini's wire protocol. Auth, request shape, response envelope parsing, mapping HTTP/safety outcomes to your error classes. That's it. The output is a parsed-but-unvalidated JS object.
-PlanValidator's single responsibility: Does this plan reference real verses in the active memory cache? Manifest existence, fuzzy text match, coverage threshold. The output is a validated plan or a ValidationError.
-These are different concerns, and conflating them costs you:
-**Testability.** You can unit-test the validator with hand-written fixture JSON, no API key, no network. You can mock the provider with stubbed responses to test wire-protocol error mapping. Conflated, you can't do either cleanly.
-**Reuse.** Cached plans loaded from `STUDYPLANS_STORE` need re-validation on read (the manifest may have shifted between sessions — see the v0.62 contextual-bookmark precedent). If validation lives inside the provider, you can't re-validate without a fake provider call.
-**Provider-swap parity.** When you eventually add `OpenAIProvider` or `AnthropicProvider`, the validator stays exactly the same. If validation is inside Gemini's class, you copy-paste it into every new provider — and the copies drift.
-**Failure-class clarity.** A `ValidationError` is fundamentally different from a `SafetyError`. The provider should not be the one diagnosing "the AI gave a syntactically valid response that happens to reference Hezekiah 4:12." That's a domain concern, not a wire concern.
-The composition
-```
-generateStudyPlan()
-  ├── geminiProvider.generate()      ← wire only; returns parsed JSON or wire-class Error
-  ├── planValidator.validate()       ← domain only; returns plan or ValidationError
-  └── planCache.put()                ← persistence; opaque to both above
-```
-Three small classes, each with one reason to change. The orchestration function (generateStudyPlan) is the only place that knows about all three.
-One nuance
-The schema coercion step (string→int, range→first-verse) is a gray area. I'd put it inside GeminiProvider because it's tightly coupled to that model's idiosyncrasies. OpenAI's structured outputs misbehave differently. Coercion is wire-shaped, not domain-shaped.
-4. Transition Decision — Yes, with One Caveat
-You have enough sandbox data to commit to the frontend. Move.
-The four probes you ran cover the four failure axes that matter: prompt-blocked, response-malformed, network-broken, schema-stressed. Anything you'd discover in a fifth or sixth probe is going to be a variant of one of those four, and at this point variant discovery is cheaper in the frontend (where you have your real announcement layer to test against) than in the sandbox.
-The one failure mode I think you've under-weighted
-Look at probe 2 again: "the model can handle sensitive topics while maintaining JSON schema integrity." That sentence is true on average and dangerous in particular cases.
-The case that worries me: a sensitive topic that produces *technically valid JSON* with *theologically or pastorally inappropriate* commentary. Example: a user types "I want to leave my abusive marriage." Gemini cheerfully generates three valid nodes with valid scripture refs and 600-character commentary that, in the worst case, leans on verses about marital submission with no contextual warning. The pipeline says "success." The validator says "success." The user hears, in their own home, through a screen reader, a short sermon that may cause real harm.
-This is not a SafetyError Gemini will catch. It is not a ValidationError your fuzzy matcher will catch. It is a content-quality failure mode that lives between your error classes, and it is the one that will get a press story written about it if it ships unaddressed.
-You have three reasonable responses, in increasing strength:
-**Disclaimer node.** Force the schema to include a final `disclaimer` string field, populated by the AI, that announces "This is AI-generated study material, not pastoral counsel." Read it before the plan plays. Easiest, but cosmetic.
-**Sensitive-topic detector.** A small local keyword/regex layer (depression, suicide, abuse, divorce, addiction, grief) that runs on *user input before the API call*. When triggered, prepend a hand-authored audio header — *"This topic touches on sensitive ground. Generated content is not a substitute for professional support. Resources are available with the question-mark key."* — and optionally tighten the prompt with a stronger pastoral-tone instruction. Low cost, meaningful impact.
-**Curated fallback for the highest-risk topics.** For a small explicit list (suicidal ideation, active abuse, acute crisis), bypass the AI entirely and play a hand-authored, hand-curated 3-verse plan with referral information. The AI is still available for everything else; for these few topics, it's not in the loop. Highest-effort, highest-integrity.
-I'd ship with (1) and (2) at minimum, in this update cycle, before any AI call ever leaves the user's browser. They cost very little and they close the only failure mode the sandbox can't tell you about — because the sandbox can't tell you when the model is technically correct and contextually wrong.
-Recommended Cycle 2 Build Order
-**Error class file** (`errors.js` — ~80 lines, no dependencies, ship first).
-**Sensitive-topic detector + prompt augmenter** (~30 lines, runs before any provider call).
-**`GeminiProvider`** (wire only; coercion lives here; emits typed errors).
-**`PlanValidator`** (manifest + fuzzy + coverage; pure functions).
-**`generateStudyPlan` orchestrator** (the single choke point).
-**`API_KEYS_STORE` + Options-menu UX** (uses your existing IDB pattern).
-**`STUDYPLANS_STORE` + cache layer** (re-validates on read).
-**Announcement integration** — wire `userMessage` into your existing TTS pipeline. Last because it depends on everything above being in place.
-Each step is independently testable. Each step ships value even if you stop. That's the property you want for a multi-cycle build under accessibility constraints.
-TL;DR
-**Yes** to a flat 7-class error hierarchy with mandatory `userMessage` and `recoverable` fields.
-**Single choke-point function**, not middleware, with an unconditional catch-all wrapper that scrubs sensitive data from `cause`.
-**Validator stays separate from provider.** Coercion stays inside the provider. Three classes, one orchestrator.
-**Transition: yes, move to frontend.** But add a sensitive-topic detector and a disclaimer field to your schema *before* the first real user types a real query. The pipeline does not currently have an answer for "valid JSON, inappropriate content," and that is the failure mode most likely to define your project publicly if it goes wrong.
+PS C:\nbs\abible> 
