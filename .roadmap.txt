@@ -1,0 +1,74 @@
+JIT_Architecture_Roadmap.md).
+At the very bottom, I have included a "Re-Onboarding Prompt" that you can copy and paste directly to Opus to instantly sync it back to our exact current position.
+ 
+JIT Curriculum Integration: Project State & Roadmap
+Project: The Accessible Bible (Offline-first, keyboard-driven, screen-reader optimized)
+Feature: Dynamic Just-In-Time (JIT) Study Plans
+🛑 Phase 0: Milestones Achieved (The Sandbox)
+• 
+BYOK Security Proven: Successfully built a local Node.js sandbox utilizing .env to read the user's API key without exposing it.
+• 
+Model Locked: gemini-2.5-flash selected and successfully tested for speed and JSON adherence.
+• 
+Schema Fences Secured: Deployed responseSchema to force strict, pure JSON output with zero conversational markdown wrappers.
+• 
+Validation Hooks Implemented: AI successfully generated expected_text_snippet (5-7 word anchors) for future fuzzy-matching against the local IndexedDB manifest.
+• 
+Happy Path Verified: Successfully generated a 3-node study plan on "struggling with anxiety" filtered through the tone of "Charles Spurgeon," perfectly adhering to the 600-character commentary limit.
+ 
+🔄 Update Cycle 1: Sandbox Reconnaissance (The Stress Tests)
+Goal: Map the exact shape of Gemini's error and safety envelopes before building the frontend UI.
+• 
+Probe 1.1 (Hard Block): Test prompt-level safety blocks (e.g., "self-harm instructions") to capture the HTTP code and promptFeedback.blockReason path.
+• 
+Probe 1.2 (Mid-Stream Stop): Test response-level safety (e.g., "depression" with "despairing tone") to capture finishReason: "SAFETY" and see if partial JSON survives.
+• 
+Probe 1.3 (Schema Absurdity): Test hallucination limits (e.g., "verses from the Book of Hezekiah") to verify if the schema returns an empty array or throws an error.
+• 
+Probe 1.4 (Truncation): Artificially lower maxOutputTokens to capture finishReason: "MAX_TOKENS" and test schema resilience to mid-sentence cutoffs.
+• 
+Probe 1.5 (Network/Auth): Test a mutated API key, an empty key, and an offline state to capture standard connectivity failure payloads.
+🔄 Update Cycle 2: Security & Provider Plumbing
+Goal: Build the foundational frontend architecture for API communication.
+• 
+Task 2.1 (The Vault): Construct the API_KEYS_STORE within IndexedDB.
+• 
+Task 2.2 (Options UI): Build the screen-reader-friendly interface in the Options menu for securely pasting, saving, and clearing the API key.
+• 
+Task 2.3 (Acoustic Redaction): Implement strict UI redaction rules (e.g., the engine only ever announces "Key ending in F2").
+• 
+Task 2.4 (The Interface): Build a thin LLMProvider class with a GeminiProvider implementation to handle the API calls from the client.
+🔄 Update Cycle 3: Pipeline Resilience & Caching
+Goal: Ensure no hallucinated data reaches the auto-jump engine.
+• 
+Task 3.1 (The Classifier): Build the error-handling router using data from Update Cycle 1, categorizing responses into success, safety_block, truncation, or api_error.
+• 
+Task 3.2 (The Validator): Write the fuzzy-matching logic to compare the AI's expected_text_snippet against the local JSON Bible files. Drop any nodes that fail to match.
+• 
+Task 3.3 (The Cache): Create the STUDYPLANS_STORE in IndexedDB. Hash the topic + filter to save validated plans for instant, offline replay.
+🔄 Update Cycle 4: Engine Integration & Audio Polish
+Goal: Connect the validated data to the user experience.
+• 
+Task 4.1 (Auto-Jump Wiring): Feed the validated JSON plan directly into the existing memoryCache and trigger the sequential auto-jump logic.
+• 
+Task 4.2 (Audio Fallbacks): Write and implement the hand-authored, screen-reader-friendly audio messages for each error class (e.g., "This topic was outside the model's response range" instead of reading raw JSON errors).
+ 
+📋 The Re-Onboarding Prompt for Opus
+If you ever need to restart the conversation with Opus, just copy and paste this exact block to get it fully up to speed:
+Plaintext
+Download codeCopy code
+Role: Senior Systems Architect
+
+Context Update: We are actively developing the JIT Study Plan feature for the "Accessible Bible" (an offline-first, screen-reader-optimized web app). 
+
+We have successfully completed our local Node.js sandbox testing. The happy path works: we used gemini-2.5-flash with a strict responseSchema to output pure JSON, successfully generating expected_text_snippets for validation, and adhering to character limits and theological tone filters.
+
+Per your previous architectural advice, we are about to execute "Path A" — a tightly time-boxed stress-testing session in the sandbox to map the exact error envelopes for safety blocks, truncations, and hallucinations before we build the frontend UI. 
+
+Here is our immediate roadmap:
+1. Execute the 5 Sandbox Probes (Safety, Mid-stream block, Absurdity, Truncation, Auth).
+2. Build the IndexedDB API_KEYS_STORE and UI redaction.
+3. Build the Error Classifier and Fuzzy-Text Validator.
+4. Build the STUDYPLANS_STORE cache and wire it into the auto-jump engine.
+
+Are there any final adjustments you would make to this roadmap before we execute the first set of sandbox stress tests?

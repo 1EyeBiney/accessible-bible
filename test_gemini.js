@@ -1,4 +1,5 @@
 require('dotenv').config();
+const fs = require('fs'); // <--- Added for file writing
 const { GoogleGenerativeAI, SchemaType } = require("@google/generative-ai");
 
 // 1. Initialize the Client
@@ -9,38 +10,23 @@ if (!apiKey) {
 }
 const genAI = new GoogleGenerativeAI(apiKey);
 
-// 2. Define the Strict JSON Schema (The "Fences")
+// 2. Define the Strict JSON Schema
 const studyPlanSchema = {
     type: SchemaType.OBJECT,
     properties: {
-        plan_title: {
-            type: SchemaType.STRING,
-            description: "A short, encouraging title for the study plan."
-        },
-        plan_description: {
-            type: SchemaType.STRING,
-            description: "A brief 1-2 sentence description of the plan and its tone."
-        },
+        plan_title: { type: SchemaType.STRING },
+        plan_description: { type: SchemaType.STRING },
         nodes: {
             type: SchemaType.ARRAY,
             items: {
                 type: SchemaType.OBJECT,
                 properties: {
                     step: { type: SchemaType.INTEGER },
-                    book_name: { 
-                        type: SchemaType.STRING, 
-                        description: "Full name of the Bible book (e.g., 'Psalms', 'John')" 
-                    },
+                    book_name: { type: SchemaType.STRING },
                     chapter: { type: SchemaType.INTEGER },
                     verse: { type: SchemaType.INTEGER },
-                    expected_text_snippet: { 
-                        type: SchemaType.STRING, 
-                        description: "A 5-7 word snippet of the actual verse text to be used for fuzzy-matching validation." 
-                    },
-                    commentary_text: { 
-                        type: SchemaType.STRING, 
-                        description: "The JIT commentary for this verse, max 600 characters." 
-                    }
+                    expected_text_snippet: { type: SchemaType.STRING },
+                    commentary_text: { type: SchemaType.STRING }
                 },
                 required: ["step", "book_name", "chapter", "verse", "expected_text_snippet", "commentary_text"]
             }
@@ -51,7 +37,7 @@ const studyPlanSchema = {
 
 // 3. Configure the Model
 const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash", // <-- UPDATED to the latest active model
+    model: "gemini-2.5-flash",
     generationConfig: {
         responseMimeType: "application/json",
         responseSchema: studyPlanSchema,
@@ -71,16 +57,19 @@ async function generatePlan(topic, filter) {
 
         const result = await model.generateContent(prompt);
         const responseText = result.response.text();
-        
-        // Parse and format the output
         const jsonOutput = JSON.parse(responseText);
-        console.log("✅ Generation Complete! Here is the structured JSON:\n");
-        console.log(JSON.stringify(jsonOutput, null, 2));
+
+        // SAVE SUCCESS TO FILE
+        fs.writeFileSync('last_run.json', JSON.stringify(jsonOutput, null, 2));
+        console.log("✅ Success! Output saved to 'last_run.json'.");
 
     } catch (error) {
-        console.error("❌ Error generating content:", error);
+        // SAVE ERROR TO FILE
+        fs.writeFileSync('last_run_error.txt', JSON.stringify(error, null, 2));
+        console.log("❌ Error occurred! Check 'last_run_error.txt'.");
     }
 }
 
-// Run the test
-generatePlan("struggling with anxiety", "Charles Spurgeon");
+// 5. CURRENT PROBE: Ready for Probe 1.2
+// Change this line to run your next test!
+generatePlan("struggling with depression", "despairing tone");
