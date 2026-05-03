@@ -63,3 +63,4 @@ commentaries-database/
 writings-database/
 data/
 data.json 
+.env
