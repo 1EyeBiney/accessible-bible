@@ -22,6 +22,7 @@ import {
 } from './audio.js';
 import { startAutoPlay, pauseAutoPlay, stopAutoPlay, isAutoPlaying, autoPlaySettings, curatedVoices, playAutoPlayUI, saveAutoPlaySettings } from './autoplay.js';
 import { helpMenuData, NOTES_STORE, COMMENTARY_STORE, THEMES, muteTutorialPrompt, setMuteTutorialPrompt } from './config.js';
+import { generateStudyPlan } from './jit/orchestrator.js';
 
 const visualBuffer = document.getElementById('visual-buffer');
 
@@ -101,12 +102,20 @@ export const jumpAmounts = ['10s', '30s', '1m', '5m', '15m', '1%', '5%', '10%'];
 export let currentJumpAmountIndex = 1;
 export let hasHeardJumpInstructions = false;
 
+// --- JIT Study Plan State ---
+export let isJitLoading = false;
+export let isJitInputMode = false;
+let jitAbortController = null;
+let heartbeatInterval = null;
+let jitTimeoutId = null;
+
 export function clearAllModes() {
     isBookSearchMode = false; isChapterMode = false; isVerseMode = false;
     isSearchMode = false; isNoteMode = false; isOptionsMenuMode = false; isAutoPlayMenuMode = false;
     isLibraryMode = false;
     isVersionMode = false;
     isHelpMode = false; isHelpMenuMode = false; isKeyboardExplorer = false;
+    isJitInputMode = false;
     currentMenuTitle = "";
     inputBuffer = ''; lastSearchLetter = '';
     lastBookSearchKey = '';
@@ -125,6 +134,111 @@ export function getSearchMode() { return isSearchMode; }
 export function getNoteMode() { return isNoteMode; }
 export function setSearchResults(val) { searchResults = val; }
 export function setCurrentSearchResultIndex(val) { currentSearchResultIndex = val; }
+
+// =====================================================================
+// JIT Study Plan — Outer Wall, State Management, Heartbeat, Cancellation
+// =====================================================================
+
+function startHeartbeatPulse() {
+    if (heartbeatInterval) return;
+    heartbeatInterval = setInterval(() => {
+        // Subtle, low, short — perceptible but ignorable beneath TTS.
+        playTone(220, 'sine', 0.05, 0.08);
+    }, 2500);
+}
+
+function stopHeartbeatPulse() {
+    if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+    }
+}
+
+function enterJitLoadingState() {
+    isJitLoading = true;
+    jitAbortController = new AbortController();
+    startHeartbeatPulse();
+    updateVisualBuffer("GENERATING STUDY PLAN", "Working... Press Escape to cancel.");
+    speak("Generating study plan. This may take a few seconds. Press Escape to cancel.");
+}
+
+function exitJitLoadingState() {
+    isJitLoading = false;
+    jitAbortController = null;
+    stopHeartbeatPulse();
+    if (jitTimeoutId) {
+        clearTimeout(jitTimeoutId);
+        jitTimeoutId = null;
+    }
+    clearVisualBuffer();
+}
+
+function isStudyPlanError(err) {
+    // Duck-type detection: anything our orchestrator throws will carry userMessage.
+    return !!(err && typeof err === 'object' && typeof err.userMessage === 'string');
+}
+
+export async function triggerJitStudyPlan(topic, filter = '') {
+    if (isJitLoading) return;            // Re-entry guard.
+    if (!topic || !topic.trim()) {
+        speak("No topic provided.");
+        return;
+    }
+
+    enterJitLoadingState();
+
+    // Hard 30-second timeout — separate from user cancellation.
+    jitTimeoutId = setTimeout(() => {
+        if (jitAbortController) {
+            try {
+                jitAbortController.abort(new DOMException('timeout', 'TimeoutError'));
+            } catch (_) {
+                jitAbortController.abort();
+            }
+        }
+    }, 30000);
+
+    try {
+        const plan = await generateStudyPlan(topic, filter, {
+            signal: jitAbortController.signal
+        });
+
+        // Distinct completion tone — slightly higher than heartbeat, brief.
+        playTone(880, 'sine', 0.15, 0.25);
+
+        const title = (plan && plan.title) ? plan.title : 'Untitled plan';
+        const description = (plan && plan.description) ? plan.description : '';
+        speak(`Plan ready. ${title}. ${description}`);
+
+        // Hand-off to the auto-play engine occurs in Cycle 3.
+        // For now, the validated plan is announced and discarded.
+    } catch (err) {
+        let safe;
+        if (isStudyPlanError(err)) {
+            safe = err;
+        } else if (err && err.name === 'AbortError') {
+            safe = {
+                userMessage: 'Plan generation was cancelled.',
+                recoverable: true
+            };
+        } else {
+            // Unforeseen native error — coerce into the announcement contract.
+            safe = {
+                userMessage: 'Something went wrong. Please try again.',
+                recoverable: true
+            };
+        }
+
+        const suffix = safe.recoverable
+            ? ' Press G to try again.'
+            : ' Press Escape to return to study mode.';
+        speak(safe.userMessage + suffix);
+    } finally {
+        exitJitLoadingState();
+    }
+}
+
+// =====================================================================
 
 function getAutoPlayMenuString(index) {
     const transitions = ["Chime", "Numbers", "Seamless"];
@@ -226,6 +340,24 @@ export function handleInput(event) {
             return;
         }
 
+        return;
+    }
+
+    // -----------------------------------------------------------------
+    // JIT Loading Intercept — swallows all keys except Escape (abort).
+    // Must sit above all navigation logic so no stray input reaches
+    // the engine while the orchestrator is in flight.
+    // -----------------------------------------------------------------
+    if (isJitLoading) {
+        event.preventDefault();
+        if (key === 'Escape') {
+            if (jitAbortController) {
+                try { jitAbortController.abort(); } catch (_) { /* no-op */ }
+            }
+            return;
+        }
+        // Soft wait tone — non-intrusive, signals "busy, please wait".
+        playTone(180, 'sine', 0.04, 0.05);
         return;
     }
 
@@ -1152,6 +1284,43 @@ export function handleInput(event) {
             }
             break;
             break;
+        case 'G': {
+            event.preventDefault();
+            if (!isReady || !searchInputEl) break;
+            clearAllModes();
+            isJitInputMode = true;
+            searchInputEl.value = '';
+            updateVisualBuffer("STUDY PLAN", "Type a topic, then press Enter. Escape to cancel.");
+            searchInputEl.focus();
+            speak("Study plan. Type a topic and press Enter to generate. Press Escape to cancel.");
+
+            const jitInputHandler = (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const topic = (searchInputEl.value || '').trim();
+                    searchInputEl.value = '';
+                    searchInputEl.removeEventListener('keydown', jitInputHandler);
+                    isJitInputMode = false;
+                    document.getElementById('focus-trap')?.focus();
+                    if (topic) {
+                        triggerJitStudyPlan(topic);
+                    } else {
+                        speak("Cancelled. No topic entered.");
+                        clearVisualBuffer();
+                    }
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    searchInputEl.value = '';
+                    searchInputEl.removeEventListener('keydown', jitInputHandler);
+                    isJitInputMode = false;
+                    document.getElementById('focus-trap')?.focus();
+                    speak("Study plan cancelled.");
+                    clearVisualBuffer();
+                }
+            };
+            searchInputEl.addEventListener('keydown', jitInputHandler);
+            break;
+        }
         case 'O':
             event.preventDefault();
             if (!isReady) break;
