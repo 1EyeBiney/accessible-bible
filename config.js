@@ -1,9 +1,13 @@
 export const DB_NAME = "BibleStudyDB";
-export const DB_VERSION = 7;
+export const DB_VERSION = 8;
 export const TEXT_STORE = "bibleText";
 export const NOTES_STORE = "userNotes";
 export const BOOKMARKS_STORE = "userBookmarks";
 export const COMMENTARY_STORE = "expertCommentary";
+export const API_KEYS_STORE = "apiKeys";
+export const STUDYPLANS_STORE = "studyPlans";
+export const PLAN_CACHE_SOFT_CAP = 100;
+export const SCHEMA_VERSION = "v1";
 export let muteTutorialPrompt = localStorage.getItem('muteTutorialPrompt') === 'true';
 export function setMuteTutorialPrompt(val) { muteTutorialPrompt = val; }
 

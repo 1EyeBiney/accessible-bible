@@ -1,8 +1,9 @@
 // db.js - IndexedDB Pipeline and Data Management
 import { speak } from './ui.js';
-import { 
-    DB_NAME, DB_VERSION, TEXT_STORE, NOTES_STORE, 
-    BOOKMARKS_STORE, COMMENTARY_STORE, muteTutorialPrompt 
+import {
+    DB_NAME, DB_VERSION, TEXT_STORE, NOTES_STORE,
+    BOOKMARKS_STORE, COMMENTARY_STORE, API_KEYS_STORE, STUDYPLANS_STORE,
+    muteTutorialPrompt
 } from './config.js';
 
 export let db = null;
@@ -26,15 +27,35 @@ export function initDatabase(callback) {
 
     request.onupgradeneeded = (event) => {
         const upgradeDb = event.target.result;
+
+        // Bulldoze TEXT_STORE on every upgrade so corrected scripture data
+        // is force-refreshed from the network. User-owned stores below are
+        // strictly preserved across upgrades.
         if (upgradeDb.objectStoreNames.contains(TEXT_STORE)) {
             upgradeDb.deleteObjectStore(TEXT_STORE);
         }
         upgradeDb.createObjectStore(TEXT_STORE, { keyPath: "id" });
+
+        // Annotation stores (notes, bookmarks, commentary) — preserved.
         [NOTES_STORE, BOOKMARKS_STORE, COMMENTARY_STORE].forEach(store => {
             if (!upgradeDb.objectStoreNames.contains(store)) {
                 upgradeDb.createObjectStore(store, { keyPath: store === NOTES_STORE ? "note_id" : "id" });
             }
         });
+
+        // --- v8: JIT feature stores. Preserved across all future upgrades. ---
+        // API_KEYS_STORE: single record per provider. keyPath = 'provider'.
+        if (!upgradeDb.objectStoreNames.contains(API_KEYS_STORE)) {
+            upgradeDb.createObjectStore(API_KEYS_STORE, { keyPath: "provider" });
+        }
+
+        // STUDYPLANS_STORE: composite-keyed cache of validated study plans.
+        // keyPath = 'cacheKey' (slugified hash of topic|filter|model|schemaVersion|manifestId).
+        // Index 'lastAccessed' supports LRU eviction sweeps.
+        if (!upgradeDb.objectStoreNames.contains(STUDYPLANS_STORE)) {
+            const planStore = upgradeDb.createObjectStore(STUDYPLANS_STORE, { keyPath: "cacheKey" });
+            planStore.createIndex("lastAccessed", "lastAccessed", { unique: false });
+        }
     };
 }
 
