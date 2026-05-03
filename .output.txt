@@ -1,4 +1,5 @@
-.js
-p: ⌁ auth for agents [www.vestauth.com]
-⏳ Generating Study Plan for: "Bible verses about quantum physics from the Book of Hezekiah" (Filter: none)...
-✅ Success! Output saved to 'last_run.json'.
+PS C:\nbs\abible> node test_gemini.js
+◇ injected env (1) from .env // tip: ⌘ enable debugging { debug: true }
+⏳ Generating Study Plan (Truncation Test) for: "Bible verses about courage"...
+❌ Parse Error! Saving raw response to 'raw_ai_response.txt'.       
+PS C:\nbs\abible> 

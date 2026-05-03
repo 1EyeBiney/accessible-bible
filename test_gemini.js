@@ -35,19 +35,20 @@ const studyPlanSchema = {
     required: ["plan_title", "plan_description", "nodes"]
 };
 
-// 3. Configure the Model
+// 3. Configure the Model with a LOW token limit to force truncation
 const model = genAI.getGenerativeModel({
     model: "gemini-2.5-flash",
     generationConfig: {
         responseMimeType: "application/json",
         responseSchema: studyPlanSchema,
+        maxOutputTokens: 50, // <--- Aggressively low to force failure
         temperature: 0.7, 
     }
 });
 
 // 4. The Execution Function
 async function generatePlan(topic, filter) {
-    console.log(`\n⏳ Generating Study Plan for: "${topic}" (Filter: ${filter})...\n`);
+    console.log(`\n⏳ Generating Study Plan (Truncation Test) for: "${topic}"...\n`);
     
     try {
         const prompt = `You are a biblical study guide generator. 
@@ -58,17 +59,15 @@ async function generatePlan(topic, filter) {
         const result = await model.generateContent(prompt);
         const responseText = result.response.text();
         
-        // --- ADDED RESILIENCE ---
         let jsonOutput;
         try {
             jsonOutput = JSON.parse(responseText);
             fs.writeFileSync('last_run.json', JSON.stringify(jsonOutput, null, 2));
             console.log("✅ Success! Output saved to 'last_run.json'.");
         } catch (parseError) {
-            console.log("❌ Parse Error! Saving raw response to 'raw_ai_response.txt' so we can see why it failed.");
+            console.log("❌ Parse Error! Saving raw response to 'raw_ai_response.txt'.");
             fs.writeFileSync('raw_ai_response.txt', responseText);
         }
-        // -------------------------
 
     } catch (error) {
         fs.writeFileSync('last_run_error.txt', JSON.stringify(error, null, 2));
@@ -76,5 +75,5 @@ async function generatePlan(topic, filter) {
     }
 }
 
-// 5. CURRENT PROBE: Hallucination Test
-generatePlan("Bible verses about quantum physics from the Book of Hezekiah", "none");
+// 5. CURRENT PROBE: Truncation Test
+generatePlan("Bible verses about courage", "none");
