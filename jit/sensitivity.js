@@ -8,7 +8,7 @@
 const TIER_A_PATTERNS = [
     /\bkill(ing)?\s+myself\b/i,
     /\bend(ing)?\s+(my|it\s+all|my\s+life)\b/i,
-    /\btake\s+my\s+(own\s+)?life\b/i,
+    /\btak(e|ing)\s+my\s+(own\s+)?life\b/i, // <-- The fix is applied here!
     /\bdon'?t\s+want\s+to\s+(be\s+here|live|wake\s+up|exist)\b/i,
     /\bbetter\s+off\s+(dead|without\s+me)\b/i,
     /\bno\s+(reason|point)\s+to\s+(live|go\s+on)\b/i,
