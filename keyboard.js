@@ -109,7 +109,20 @@ let jitAbortController = null;
 let heartbeatInterval = null;
 let jitTimeoutId = null;
 
+// --- Idempotent input-listener tracker (B1 pattern) ---
+// Only one keydown handler may be bound to searchInputEl at a time.
+// All modes that attach a handler must route through this slot so
+// clearAllModes() can detach it cleanly before any new mode binds.
+let activeInputHandler = null;
+
 export function clearAllModes() {
+    // Detach any active searchInputEl listener before flipping flags,
+    // so a previous mode's Enter/Escape branch cannot fire after a
+    // new mode has taken over.
+    if (activeInputHandler && searchInputEl) {
+        searchInputEl.removeEventListener('keydown', activeInputHandler);
+        activeInputHandler = null;
+    }
     isBookSearchMode = false; isChapterMode = false; isVerseMode = false;
     isSearchMode = false; isNoteMode = false; isOptionsMenuMode = false; isAutoPlayMenuMode = false;
     isLibraryMode = false;
@@ -1291,8 +1304,11 @@ export function handleInput(event) {
             isJitInputMode = true;
             searchInputEl.value = '';
             updateVisualBuffer("STUDY PLAN", "Type a topic, then press Enter. Escape to cancel.");
-            searchInputEl.focus();
             speak("Study plan. Type a topic and press Enter to generate. Press Escape to cancel.");
+
+            // Defer focus by one tick so any synchronous blur reclaim from
+            // clearAllModes() settles before we hand off to the input element.
+            setTimeout(() => searchInputEl.focus(), 10);
 
             const jitInputHandler = (e) => {
                 if (e.key === 'Enter') {
@@ -1300,6 +1316,7 @@ export function handleInput(event) {
                     const topic = (searchInputEl.value || '').trim();
                     searchInputEl.value = '';
                     searchInputEl.removeEventListener('keydown', jitInputHandler);
+                    activeInputHandler = null;
                     isJitInputMode = false;
                     document.getElementById('focus-trap')?.focus();
                     if (topic) {
@@ -1312,12 +1329,14 @@ export function handleInput(event) {
                     e.preventDefault();
                     searchInputEl.value = '';
                     searchInputEl.removeEventListener('keydown', jitInputHandler);
+                    activeInputHandler = null;
                     isJitInputMode = false;
                     document.getElementById('focus-trap')?.focus();
                     speak("Study plan cancelled.");
                     clearVisualBuffer();
                 }
             };
+            activeInputHandler = jitInputHandler;
             searchInputEl.addEventListener('keydown', jitInputHandler);
             break;
         }

@@ -1,360 +1,117 @@
 Searched codebase for "Role: Senior Systems Architect
-Context Update: We have identified a "Code Shadowing" bug in keyboard.js. The 'G' key triggers the audio prompt, but subsequent keystrokes are hijacked by global navigation commands instead of being captured as text input. 
-Hypothesis: Conflicting logic between a legacy "virtual" input buffer and the modern "searchInputEl" approach is causing the focus to fail or the keyboard router to remain unlocked.
-Proposed Approach:
-Standardize on the real HTML input (searchInputEl) for topic capture.
-Remove all virtual 'inputBuffer' logic related to JIT Study Plans.
-Use a setTimeout(() => searchInputEl.focus(), 10) inside the 'G' case to ensure clean focus hand-off.
-Consolidate all 'G' trigger logic into a single, clean block.
-Architectural Evaluation Required:
-Does this "Single-Source-of-Truth" approach align with our accessibility and offline-first goals?
-Are there any potential race conditions in using searchInputEl for both JIT topics and standard word searches?
-If you validate this approach, please provide the specific refactor for the 'case G' block and identify the redundant code blocks that must be purged from keyboard.js.", 7 results. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\jit\orchestrator.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js
-Thinking: I'm checking what's currently implemented for the G key in keyboard.js to see what needs to be added or modified.
-Searched for regex isJitInputMode|jitInputHandler|case &#39;G&#39;|JIT (**/keyboard.js), 20 results. Files: c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js
-Searched for regex case &#39;G&#39;|case &#39;F&#39; (**/keyboard.js), 2 results. Files: c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js
-Read keyboard.js, lines 1280 to 1340
-Thinking: I'm checking how the F key triggers search mode and reviewing the input handler logic that prevents search from activating when the user is already typing in an input field.
-Let me look at the F search mode pattern and the global INPUT-tag bypass to understand the existing precedent:
-Read keyboard.js, lines 1465 to 1485
-Read keyboard.js, lines 160 to 256
-Read keyboard.js, lines 335 to 350
-Thinking: I need to examine the `handleInput` function to locate that early check for `event.target.tagName === 'INPUT'`.
-Searched for regex tagName === &#39;INPUT&#39; (**/keyboard.js), 1 result. Files: c:\nbs\abible\keyboard.js
-Thinking: I'm seeing the full picture now. The bug in the `G` key handler is that it focuses the search input synchronously and then adds a keydown listener, but the keyup event from pressing `G` itself or the focus-trap mechanism could be interfering with that focus state.
-Actually, the real culprit is likely the focus-trap's blur listener from v0.27.3 — it uses `requestAnimationFrame` to immediately reclaim focus whenever focus leaves the trap element. So when `searchInputEl.focus()` runs, the blur listener fires and yanks focus back before the user can type anything. That's why the keystrokes get hijacked by the global navigation commands instead of reaching the search input.
-Since F-key search apparently works fine, there must be some mechanism allowing focus to stick to `searchInputEl` — maybe an exclusion list in the blur reclaim logic, or a flag that suppresses it in certain modes. Without seeing that blur listener code, I'll go with the user's proposed fix: wrap the focus call in `setTimeout` with a small delay to give the focus a clean handoff, and consolidate the G case to use `searchInputEl` consistently like F does. The focus isn't landing on searchInputEl when G is pressed, which is why keystrokes route to global navigation instead of the input field. The setTimeout wrapper delays the focus call until after the current event tick, preventing the focus-trap's blur listener from immediately reclaiming focus before the input can take effect. I'm puzzled why F works without this workaround, but the user's solution is the right fix for G.
-For the refactor, I'll wrap the focus call in a 10ms setTimeout and check if there's any other redundant JIT-related code scattered elsewhere. The G-key handler itself looks fine — it goes through the mode checks, prevents default, clears all modes, and then attempts to focus the input. The JIT Loading Intercept block only fires when isJitLoading is true, so there's no conflict there.
-But I'm realizing the setTimeout approach might not fully solve the focus-trap issue. When focus() is called, the blur listener fires and uses requestAnimationFrame to reclaim focus back to the trap — whether that happens synchronously or 10ms later, the blur handler still yanks focus away. There must be a guard in the blur handler that checks for whitelisted input elements or a flag like isAcceptingInput that prevents the reclaim during JIT mode.
-Since I can't see the focus-trap setup in app.js, the safest approach is to apply the setTimeout fix and verify that the blur listener actually excludes isJitInputMode from its reclaim logic. Let me check the focus-trap configuration to confirm.
-Searched for regex focus-trap|focusTrap|addEventListener\(&#39;blur (**/app.js), 14 results. Files: c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js
-Read app.js, lines 615 to 630
-Thinking: I found the bug—the focus-trap's blur listener at line 620 in app.js reclaims focus unless one of several conditions is met: uninitialized state, search mode, note mode, welcome mode, or tutorial mode. But there's no check for `isJitInputMode`, which explains why the search function works but the G command doesn't.
-The real fix requires two changes: adding `isJitInputMode` to the blur-reclaim exclusion check in app.js, and the setTimeout wrapper in keyboard.js won't actually solve the underlying issue. The user's diagnosis about a single source of truth is conceptually right, but the actual problem is the focus-trap reclaiming focus before the JIT input state can take effect. I need to import `isJitInputMode` into app.js and add it to that conditional check.
-Found the actual bug. Let me verify the import path:
-Searched for regex getSearchMode|getNoteMode|from &#39;./keyboard.js&#39; (**/app.js), 5 results. Files: c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js
-Architectural Evaluation — Diagnosis Correction Required
-I'll validate the spirit of your approach and answer your three questions, but the proposed fix as stated will not resolve the bug. The real shadowing is in a different place than your hypothesis suggests, and
-setTimeout(10) (c:\BCI\VSCode-win32-x64-1.116.0\560a9dba96\resources\app\extensions\node_modules\typescript\lib\lib.dom.d.ts:44123)
-is treating a symptom that isn't actually the root cause. Let me show you the actual culprit.
-The Real Bug — Located
-In
-app.js#L620-L624 (/c:/nbs/abible/app.js:620)
-you have the focus-trap blur reclaim from v0.27.3:
+Context Update: We have successfully implemented the v65.2 Atomic Patch. The focus-trap now respects JIT modes, and the search input correctly manages its listeners. Integration tests confirm the pipeline is functional from input through error mapping.
+We are now moving to Task 2.6: The Vault (API Key Storage) & The Cache (Study Plans).
+Based on our verified strategy:
+Vault: We will use IndexedDB for a single-record-per-provider store.
+Redaction: TTS will announce "Configured/Missing" and show only the last 4 characters when saving.
+Cache: We will use a composite key (topic + filter + model + schemaVersion + manifestId) with an LRU eviction policy.
+Required Action:
+Please provide the specific schema updates for db.js and config.js to implement the 'apiKeys' and 'studyPlans' stores. Ensure these stores are preserved during any future scripture-data refreshes.", 15 results. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.output.txt, c:\nbs\abible\.roadmap.txt, c:\nbs\abible\.roadmap.txt, c:\nbs\abible\.todo.txt, c:\nbs\abible\config.js, c:\nbs\abible\db.js, c:\nbs\abible\gemini.md, c:\nbs\abible\gemini.md, c:\nbs\abible\gemini.md, c:\nbs\abible\jit\errors.js, c:\nbs\abible\jit\orchestrator.js, c:\nbs\abible\jit\PlanValidator.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\test_gemini.js
+Thinking: I need to check the current database and configuration files to understand what changes are needed and provide precise diffs.
+Read db.js
+Read config.js
+Thinking: I need to increment the database version to 8 so I can add the new stores, since the current v7 handler won't create them. I'm also noting that the existing upgrade pattern wipes TEXT_STORE on every migration, but the annotation stores survive because they use conditional creation logic.
+Replacing 24 lines with 49 lines in config.js, db.js
 ```
-focusTrap.addEventListener('blur', () => {
-    if (isInitialized && !getSearchMode() && !getNoteMode() && !isWelcomeMode && !isTutorialMode) {
-        requestAnimationFrame(() => focusTrap.focus());
-    }
-});
 ```
-This listener fires the moment focus moves anywhere away from #focus-trap. The exclusion list —
-getSearchMode() (c:\nbs\abible\keyboard.js:133)
-,
-getNoteMode() (c:\nbs\abible\keyboard.js:134)
-,
-isWelcomeMode (c:\nbs\abible\app.js:41)
-,
-isTutorialMode (c:\nbs\abible\app.js:44)
-— is the single source of truth about "when is it OK for focus to leave?"
+```
+```
+```
+```
+Checked config.js, db.js, no problems found
+Schema patches applied cleanly. No lint errors.
+Diff Summary
+config.js (/c:/nbs/abible/config.js)
 **
-isJitInputMode (c:\nbs\abible\keyboard.js:107)
-is not in that list.**
-So the sequence on G:
-`case 'G'` runs →
-searchInputEl.focus() (c:\nbs\abible\app.js:35)
-succeeds momentarily.
-2. #focus-trap fires its blur event.
-3. The blur handler sees
-isSearchMode === false (c:\nbs\abible\keyboard.js:80)
-,
-isNoteMode === false (c:\nbs\abible\keyboard.js:81)
-, etc. — none of the JIT flags exist in the check.
-4.
-requestAnimationFrame(() => focusTrap.focus()) (c:\BCI\VSCode-win32-x64-1.116.0\560a9dba96\resources\app\extensions\node_modules\typescript\lib\lib.dom.d.ts:20132)
-fires.
-5. Focus snaps back to #focus-trap. Keystrokes route through global navigation.
-That's exactly your symptom. And it explains why F works fine (it sets
-isSearchMode = true (c:\nbs\abible\keyboard.js:80)
-, which is in the exclusion list) and why G fails identically every time. The bug is not "shadowing between virtual and real input" — it's a missing entry in a guard predicate.
-**
-setTimeout(10) (c:\BCI\VSCode-win32-x64-1.116.0\560a9dba96\resources\app\extensions\node_modules\typescript\lib\lib.dom.d.ts:44123)
-does not fix this.** The rAF reclaim still fires on the eventual
-searchInputEl.focus() (c:\nbs\abible\app.js:35)
-call. You'd be deferring the broken focus by 10ms, not avoiding it.
-Answers to Your Three Architectural Questions
-Q1 — Does Single-Source-of-Truth (real
-searchInputEl (c:\nbs\abible\app.js:35)
-, no virtual buffer) align with our goals?
-Yes, fully aligned, and you're already doing it. Reviewing your current case &#39;G&#39; in
-keyboard.js#L1287 (/c:/nbs/abible/keyboard.js:1287)
-, there is no virtual
-inputBuffer (c:\nbs\abible\app.js:24)
-involvement —
-inputBuffer (c:\nbs\abible\app.js:24)
-is only used for chapter/verse digit modes (lines around the
-isChapterMode || isVerseMode (c:\nbs\abible\keyboard.js:79)
-block). The G handler exclusively uses
-searchInputEl (c:\nbs\abible\app.js:35)
-. There is no shadowing to remove because there's nothing duplicated.
-The principle of standardizing on the real DOM input is the right one — it leverages native screen-reader text-editing affordances (your "Stealth Entry Protocol" from §4 of the master directive), it avoids re-implementing caret/selection/IME behavior, and it composes cleanly with the focus-trap exclusion model already in place.
-Q2 — Race conditions sharing
-searchInputEl (c:\nbs\abible\app.js:35)
-between JIT topic and standard word search?
-One genuine concern, two false alarms.
-**False alarm:** Both modes use
-searchInputEl.value = '' (c:\nbs\abible\app.js:35)
-on entry, so stale text from one mode never bleeds into the other.
-**False alarm:** The `keydown` listener you add in `case 'G'` cleans itself up on Enter or Escape, so there's no leaked handler accumulating across invocations.
-**Real concern:** **Both modes can be opened over each other without a guard.** If a user is mid-word-search (
-isSearchMode === true (c:\nbs\abible\keyboard.js:80)
-, focus on
-searchInputEl (c:\nbs\abible\app.js:35)
-, F-mode keydown listener attached) and presses G, your G handler calls
-clearAllModes() (c:\nbs\abible\keyboard.js:112)
-(which sets
-isSearchMode = false (c:\nbs\abible\keyboard.js:80)
-) and then attaches a second keydown listener — but the first F-mode listener was attached by
-app.js (/c:/nbs/abible/app.js)
-and is not removed by
-clearAllModes() (c:\nbs\abible\keyboard.js:112)
-. Now both listeners fire on every Enter, and the F handler's logic competes with G's.
-  Mitigation: at the top of the G handler, after
-clearAllModes() (c:\nbs\abible\keyboard.js:112)
-, you need to ensure the F-mode listener has been detached. This is most cleanly done by having
-clearAllModes() (c:\nbs\abible\keyboard.js:112)
-itself dispatch a
-searchInputEl.blur() (c:\nbs\abible\app.js:35)
-(which will not trigger the focus-trap reclaim because the input is the source, not the target) followed by clearing
-searchInputEl.value (c:\nbs\abible\app.js:35)
-. Or, more simply, audit
-app.js (/c:/nbs/abible/app.js)
-for how the F-mode keydown/Enter handler is registered and ensure both modes share an idempotent attach pattern.
-  This is a latent bug that exists regardless of your current refactor, but it's worth flagging.
-Q3 — The Refactor
-The fix has two surgical edits, not one. The G case in
-keyboard.js (/c:/nbs/abible/keyboard.js)
-is fundamentally fine; the missing piece is the focus-trap exclusion in
-app.js (/c:/nbs/abible/app.js)
+DB_VERSION (c:\nbs\abible\config.js:2)
+bumped 7 → 8** (your previous v7 upgrade handler did not contain the new stores; bumping triggers a fresh
+onupgradeneeded (c:\BCI\VSCode-win32-x64-1.116.0\560a9dba96\resources\app\extensions\node_modules\typescript\lib\lib.dom.d.ts:22465)
+to create them).
+Four new exports alongside the existing store constants:
+```
+export const API_KEYS_STORE = "apiKeys";
+export const STUDYPLANS_STORE = "studyPlans";
+export const PLAN_CACHE_SOFT_CAP = 100;
+export const SCHEMA_VERSION = "v1";
+```
+db.js (/c:/nbs/abible/db.js)
+Import line extended to include
+API_KEYS_STORE (c:\nbs\abible\config.js:7)
+and
+STUDYPLANS_STORE (c:\nbs\abible\config.js:8)
 .
-The Correct Refactor
-Edit 1 —
-app.js (/c:/nbs/abible/app.js)
-(the actual fix)
-Import
-isJitInputMode (c:\nbs\abible\keyboard.js:107)
-from
-keyboard.js (/c:/nbs/abible/keyboard.js)
-and add it to the blur-reclaim exclusion. Since
-isJitInputMode (c:\nbs\abible\keyboard.js:107)
-is let-exported, importing it gives you a live binding — checking it inside the blur handler always reads the current value.
-**Update the existing import on
-app.js#L14 (/c:/nbs/abible/app.js:14)
-:**
+**
+onupgradeneeded (c:\BCI\VSCode-win32-x64-1.116.0\560a9dba96\resources\app\extensions\node_modules\typescript\lib\lib.dom.d.ts:22465)
+handler** restructured so the existing logic is preserved verbatim (TEXT bulldoze, conditional create of NOTES/BOOKMARKS/COMMENTARY) and the new v8 block appends:
+-
+API_KEYS_STORE (c:\nbs\abible\config.js:7)
+— created with
+keyPath: "provider" (c:\nbs\abible\db.js:37)
+(single record per provider).
+STUDYPLANS_STORE (c:\nbs\abible\config.js:8)
+— created with
+keyPath: "cacheKey" (c:\nbs\abible\db.js:37)
+and a lastAccessed index for LRU eviction.
+Both new stores use the same
+if (!contains) (c:\nbs\abible\db.js:34)
+guard pattern as the annotation stores, which means they will not be touched on any future DB version bump. Only
+TEXT_STORE (c:\nbs\abible\config.js:3)
+is destroyed-and-recreated; everything else survives indefinitely.
+Preservation Guarantee — Verified
+The store-preservation contract is now:
+Store On upgrade
+TEXT_STORE (c:\nbs\abible\config.js:3)
+| Wiped and recreated every upgrade (intentional — forces scripture refresh) |
+|
+NOTES_STORE (c:\nbs\abible\config.js:4)
+| Preserved |
+|
+BOOKMARKS_STORE (c:\nbs\abible\config.js:5)
+| Preserved |
+|
+COMMENTARY_STORE (c:\nbs\abible\config.js:6)
+| Preserved |
+|
+API_KEYS_STORE (c:\nbs\abible\config.js:7)
+| Preserved |
+|
+STUDYPLANS_STORE (c:\nbs\abible\config.js:8)
+| Preserved |
+User-owned data — annotations, vault, and AI cache — survives all future scripture corrections. Only the canonical text gets refreshed.
+Record Shape Reference (for vault.js and planCache.js to follow)
+`apiKeys`:
 ```
-import { handleInput, clearAllModes, setSearchMode, setNoteMode, getSearchMode, getNoteMode, setSearchResults, setCurrentSearchResultIndex, updateSearchVisualBuffer, clearVisualBuffer, updateVisualBuffer, isJitInputMode } from './keyboard.js';
-```
-**Update the focus-trap blur handler at
-app.js#L620 (/c:/nbs/abible/app.js:620)
-:**
-```
-focusTrap.addEventListener('blur', () => {
-    if (isInitialized && !getSearchMode() && !getNoteMode() && !isWelcomeMode && !isTutorialMode && !isJitInputMode) {
-        requestAnimationFrame(() => focusTrap.focus());
-    }
-});
-```
-That single added clause is the real fix. With it in place,
-searchInputEl.focus() (c:\nbs\abible\app.js:35)
-in your G handler will stick, keystrokes will land in the input, and the early
-event.target.tagName === 'INPUT' (c:\nbs\abible\app.js:486)
-bypass at the top of
-handleInput (c:\nbs\abible\keyboard.js:263)
-will correctly route them away from global navigation.
-Edit 2 —
-keyboard.js (/c:/nbs/abible/keyboard.js)
-(defensive polish, not the fix)
-Wrap the
-searchInputEl.focus() (c:\nbs\abible\app.js:35)
-call in a 10ms
-setTimeout (c:\BCI\VSCode-win32-x64-1.116.0\560a9dba96\resources\app\extensions\node_modules\typescript\lib\lib.dom.d.ts:44123)
-per your proposal. After Edit 1 it's not strictly necessary, but it's a harmless belt-and-suspenders measure that defends against any future micro-task that might claim focus between
-clearAllModes() (c:\nbs\abible\keyboard.js:112)
-and the user's first keystroke.
-```
-case 'G': {
-    event.preventDefault();
-    if (!isReady || !searchInputEl) break;
-    clearAllModes();
-    isJitInputMode = true;
-    searchInputEl.value = '';
-    updateVisualBuffer("STUDY PLAN", "Type a topic, then press Enter. Escape to cancel.");
-    speak("Study plan. Type a topic and press Enter to generate. Press Escape to cancel.");
-    // Defer focus by one tick so any synchronous blur reclaim from clearAllModes()
-    // settles before we hand off to the input element.
-    setTimeout(() => searchInputEl.focus(), 10);
-    const jitInputHandler = (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            const topic = (searchInputEl.value || '').trim();
-            searchInputEl.value = '';
-            searchInputEl.removeEventListener('keydown', jitInputHandler);
-            isJitInputMode = false;
-            document.getElementById('focus-trap')?.focus();
-            if (topic) {
-                triggerJitStudyPlan(topic);
-            } else {
-                speak("Cancelled. No topic entered.");
-                clearVisualBuffer();
-            }
-        } else if (e.key === 'Escape') {
-            e.preventDefault();
-            searchInputEl.value = '';
-            searchInputEl.removeEventListener('keydown', jitInputHandler);
-            isJitInputMode = false;
-            document.getElementById('focus-trap')?.focus();
-            speak("Study plan cancelled.");
-            clearVisualBuffer();
-        }
-    };
-    searchInputEl.addEventListener('keydown', jitInputHandler);
-    break;
+{
+  provider: 'gemini',           // keyPath
+  encryptedKey: '<plaintext for now; ciphertext slot reserved>',
+  keyEnvelope: null,            // future: { algo, iv, salt, ... }
+  redactedDisplay: '••••••a3F2',
+  savedAt: 1714752000000,
+  modelPreference: 'gemini-2.5-flash'
 }
 ```
-Redundant code to purge
-None. I searched the file for any second handler bound to G, any virtual buffer accumulation tied to JIT, or any duplicate JIT state declarations. The current G implementation is already a single clean block. Your "code shadowing" hypothesis was directionally right (something was shadowing the input), but the shadowing partner is the focus-trap blur reclaim in
-app.js (/c:/nbs/abible/app.js)
-, not a second piece of
-keyboard.js (/c:/nbs/abible/keyboard.js)
-logic.
-Shall I apply both edits?
-
-***response back to Opus after I did further testing on the G key
-Empirical Diagnosis from Your Test
-Excellent test. The behavior you observed is actually diagnostic gold — it confirms my Edit 1 hypothesis and reveals a second, deeper finding I want to surface clearly so Gemini has both to work with.
-What Your Test Proved
-Finding 1 — The focus-trap reclaim IS the bug. Confirmed.
-The sequence: G → some other key → F → typing works → API key rejection message → Escape → F → word search works normally.
-What this tells us, step by step:
-After `G`, focus tried to land on
-searchInputEl (c:\nbs\abible\app.js:35)
-but got yanked back to #focus-trap (the missing
-isJitInputMode (c:\nbs\abible\keyboard.js:107)
-exclusion in
-app.js (/c:/nbs/abible/app.js)
-'s blur reclaim).
-2. The "other key" you pressed went to global navigation because focus was on #focus-trap, not
-searchInputEl (c:\nbs\abible\app.js:35)
-— meaning
-isJitInputMode (c:\nbs\abible\keyboard.js:107)
-was set, but the routing predicate was wrong, not the input element.
-3. When you then pressed F, the F handler ran cleanly: it set
-isSearchMode = true (c:\nbs\abible\keyboard.js:80)
-(which is in the focus-trap exclusion list), focused
-searchInputEl (c:\nbs\abible\app.js:35)
-, and focus stuck.
-4. Typing into the input → the keydown listener registered by the F handler fired on Enter → it did its word search behavior.
-The "API key rejected" announcement is the real prize, though, and I want to slow down on it.
-Finding 2 — Pressing G then F **chained both handlers onto
-searchInputEl (c:\nbs\abible\app.js:35)
-simultaneously.**
-This is the latent bug I flagged in Q2 of my last response, and you just demonstrated it live. Here's what actually happened:
-`G` ran → attached
-jitInputHandler (c:\nbs\abible\keyboard.js:1297)
-to
-searchInputEl (c:\nbs\abible\app.js:35)
-via
-addEventListener('keydown', ...) (c:\BCI\VSCode-win32-x64-1.116.0\560a9dba96\resources\app\extensions\node_modules\typescript\lib\lib.dom.d.ts:41615)
-.
-2.
-clearAllModes() (c:\nbs\abible\keyboard.js:112)
-did not remove that listener (it can't —
-clearAllModes (c:\nbs\abible\keyboard.js:112)
-doesn't know about it).
-3. F ran → attached its own keydown handler to
-searchInputEl (c:\nbs\abible\app.js:35)
-(whatever lives in
-app.js (/c:/nbs/abible/app.js)
-for the F mode).
-4. You typed and pressed Enter.
-5. Both handlers fired on the Enter event.
-6. The F handler did its word-search thing.
-7. The G handler also fired — read
-searchInputEl.value (c:\nbs\abible\app.js:35)
-, called
-triggerJitStudyPlan(yourTypedWord) (c:\nbs\abible\keyboard.js:181)
-, which actually went through the orchestrator → GeminiProvider → tried to load an API key from the (empty) vault → threw AuthError → spoke "Your API key was rejected. Please update it in the Options menu. Press G to try again."
-That announcement is proof your entire JIT pipeline works end-to-end. Sensitivity classifier passed it, orchestrator dispatched it, GeminiProvider rejected at auth, error class mapped to AuthError,
-userMessage (c:\nbs\abible\keyboard.js:178)
-reached the announcer with the right recovery suffix. That's a substantial integration milestone — Cycle 2 plumbing is alive.
-But the chained-handler symptom is a real bug that will burn you again later under different sequences. It needs fixing before you ship.
-Finding 3 — Once
-clearAllModes (c:\nbs\abible\keyboard.js:112)
-ran (via Escape), F worked normally.
-Confirms that the chained-handler bug only manifests when a second mode is opened over a still-listening first mode without an explicit cleanup of the first mode's listener. Escape paths happen to clear properly because the
-jitInputHandler (c:\nbs\abible\keyboard.js:1297)
-does
-removeEventListener (c:\nbs\abible\keyboard.js:1302)
-on its own Escape branch. The forward G→F sequence has no such cleanup.
-Updated Fix List for Gemini's Review
-Fix A (mandatory) —
-app.js (/c:/nbs/abible/app.js)
-focus-trap exclusion
-Add
-isJitInputMode (c:\nbs\abible\keyboard.js:107)
-(and arguably
-isJitLoading (c:\nbs\abible\keyboard.js:106)
-too, for symmetry during the loading phase) to the focus-trap blur-reclaim guard. This is the original Edit 1 from my prior response and the empirical test confirms it.
-Fix B (mandatory) — Idempotent listener attach pattern on
-searchInputEl (c:\nbs\abible\app.js:35)
-The shared
-searchInputEl (c:\nbs\abible\app.js:35)
-needs a discipline that says only one mode's keydown handler is bound at a time. Two reasonable approaches:
-Approach B1: Track and explicitly remove the active listener.
-Maintain a module-level let activeInputHandler = null; in
-keyboard.js (/c:/nbs/abible/keyboard.js)
-. Any mode that attaches one first does:
+`studyPlans`:
 ```
-if (activeInputHandler) searchInputEl.removeEventListener('keydown', activeInputHandler);
-activeInputHandler = jitInputHandler;
-searchInputEl.addEventListener('keydown', jitInputHandler);
+{
+  cacheKey: '<slugified composite hash>',  // keyPath
+  topic: 'struggling with anxiety',
+  filter: 'Charles Spurgeon',
+  model: 'gemini-2.5-flash',
+  schemaVersion: 'v1',                     // from SCHEMA_VERSION export
+  manifestId: 'bsb2',
+  plan: { /* full validated plan */ },
+  createdAt: 1714752000000,
+  lastAccessed: 1714752000000              // indexed for LRU sweeps
+}
 ```
-And
-clearAllModes() (c:\nbs\abible\keyboard.js:112)
-does the same removal at the top before flipping any flags. Single source of truth for "what listener is active."
-Approach B2: One permanent dispatcher, mode-aware routing.
-Attach one keydown handler to
-searchInputEl (c:\nbs\abible\app.js:35)
-once at boot in
-app.js (/c:/nbs/abible/app.js)
-. Inside it, branch on
-isJitInputMode (c:\nbs\abible\keyboard.js:107)
-vs
-isSearchMode (c:\nbs\abible\keyboard.js:80)
-to route Enter/Escape appropriately. No add/remove churn. More invasive change but eliminates the entire class of bug.
-I lean toward B1 as the smaller patch — it's minimally invasive, isolates the discipline to the keyboard module, and matches your existing pattern of one-shot attach/detach handlers.
-Fix C (recommended) — Defensive
-setTimeout(10) (c:\BCI\VSCode-win32-x64-1.116.0\560a9dba96\resources\app\extensions\node_modules\typescript\lib\lib.dom.d.ts:44123)
-on the focus call
-After Fix A this is no longer required, but I'd keep it as belt-and-suspenders. Costs nothing and defends against any future event-loop micro-task that might race with focus assignment.
-Fix D (consider) — Add
-isJitLoading (c:\nbs\abible\keyboard.js:106)
-to the focus-trap exclusion too
-While the orchestrator is in flight, your loading intercept already swallows everything except Escape. But if any code path ever tries to focus a different element during loading (it shouldn't, currently), the focus-trap reclaim would fight it. Adding
-!isJitLoading (c:\nbs\abible\keyboard.js:106)
-to the guard is a cheap consistency improvement that future-proofs against accidents.
-Big Picture for Gemini
-The integration test you just ran proves three things:
-**The orchestrator pipeline is functionally complete and correctly typed.** A user-typed string traveled all the way through sensitivity → provider → auth-rejection → typed error → screen-reader-friendly announcement. That's the entire Cycle 2 spine, working.
-**The remaining bugs are all in the keyboard input plumbing**, not the AI plumbing. Specifically: focus management and listener lifecycle on the shared
-searchInputEl (c:\nbs\abible\app.js:35)
-. These are mechanical, well-bounded fixes.
-3. Your design instinct was correct — single source of truth on
-searchInputEl (c:\nbs\abible\app.js:35)
-is the right architecture. The bugs are implementation of that design, not flaws in the design.
-When you give Gemini both responses, my recommended question for it is:
-"Given these two findings, which fix order minimizes risk: (a) Fix A first, retest to isolate, then Fix B; or (b) Fix A and Fix B together as one atomic patch? And do you see any reason Approach B2 (one permanent dispatcher) would be architecturally superior to B1 in this codebase given the existing patterns in
-app.js (/c:/nbs/abible/app.js)
-and keyboard.js?"
-That gets you a second-opinion validation on the sequencing and on the B1-vs-B2 trade-off, which is the only judgment call left in this fix set.
-The rest of the work is mechanical. Let me know when you want me to apply Fix A and Fix B (B1 unless you decide otherwise after consulting Gemini).
+Next Step
+You're ready to author the two leaf modules:
+`jit/vault.js` — `getKey(provider)`, `setKey(provider, rawKey)`, `clearKey(provider)`, `redactedDisplay(provider)`. Reads/writes
+API_KEYS_STORE (c:\nbs\abible\config.js:7)
+. Never logs the raw key string.
+`jit/planCache.js` — `buildCacheKey({...})`,
+get(cacheKey) (c:\nbs\abible\keyboard.js:964)
+,
+put(cacheKey, plan, meta) (c:\nbs\abible\app.js:151)
+, evictIfOverCap(). Re-validates plans on read; lazy-evicts asynchronously after a successful read.
+When you're ready to scaffold either or both, say the word.
