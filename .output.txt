@@ -1,194 +1,32 @@
-Searched codebase for "Role: Senior Systems Architect
-Context: We are moving to v69.2 (Advanced Library Management). This update introduces sorting, favoriting (pinning), and first-letter navigation to the Study Library.
-Objectives:
-Schema Update: Implement an 'isFavorite' (Boolean) field in the STUDYPLANS_STORE. Coerce existing v3 records to false on read; do NOT bump SCHEMA_VERSION.
-Sorting Views (Left/Right Arrows): Implement in-memory sorting for three views:
-- Recent (Default): lastAccessed DESC.
-- Alphabetical: topic A-Z (locale-aware).
-- Favorites: Filtered subset where isFavorite === true, sorted by lastAccessed DESC.
-Pinning Logic (K Key): 
-- Use 'K' to toggle the isFavorite state. 
-- Limit favorites to 20 total. 
-- Use distinct ascending/descending tones and the words "Pinned" or "Unpinned" for feedback.
-Eviction Safety: Patch evictIfOverCap in planCache.js to skip any record where isFavorite is true.
-Alpha Navigation: In Alphabetical view only, allow letter-key jumps to topics starting with that character.
-Persistence: Save the user's currentSortMode in localStorage so it persists across reloads.
-Surgical Requirements:
-Update planCache.js: Add setFavorite(cacheKey, bool), getFavoriteCount(), and the eviction guard.
-Update keyboard.js: Implement the view-state machinery (currentSortMode), Left/Right cycling, 'K' toggle, and Alpha navigation.
-Update formatLibraryEntry: Handle the visual (★) and TTS ("Pinned") prefixes.
-Action Required:
-Provide the architectural critique for this implementation path and then generate the surgical diffs to apply these changes.", 16 results. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.output.txt, c:\nbs\abible\.output.txt, c:\nbs\abible\.output.txt, c:\nbs\abible\app.js, c:\nbs\abible\config.js, c:\nbs\abible\db.js, c:\nbs\abible\jit\orchestrator.js, c:\nbs\abible\jit\planCache.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\project_brief.md
-Thinking: I'll start by examining the relevant files to understand what we're working with, then offer some feedback and apply the necessary changes.
-Read planCache.js, lines 90 to 213
-Searched for regex readRecord|writeRecord|countRecords (**/jit/planCache.js), 7 results. Files: c:\nbs\abible\jit\planCache.js, c:\nbs\abible\jit\planCache.js, c:\nbs\abible\jit\planCache.js, c:\nbs\abible\jit\planCache.js, c:\nbs\abible\jit\planCache.js, c:\nbs\abible\jit\planCache.js, c:\nbs\abible\jit\planCache.js
-Searched for text case &#39;K&#39;: (**/keyboard.js), 1 result. Files: c:\nbs\abible\keyboard.js
-Thinking: I'm checking how the early return for study library mode affects the K variable handling—since it exits that block first, I need to verify the current layout to ensure K gets processed correctly in the main mode path.
-Architectural Critique
-The plan as specified is sound. Three small refinements before applying:
-**
-getAllSorted() (c:\nbs\abible\jit\planCache.js:175)
-already returns lastAccessed DESC from the cursor**, so the in-memory &#39;recent&#39; mode is identity. Keep it that way; don't double-sort.
-2. `K` toggle in Library mode is a write-back, not a read. We should mutate the local entry's isFavorite immediately (optimistic) and persist via setFavorite(), without bumping
-lastAccessed (c:\nbs\abible\jit\planCache.js:111)
-. Pinning shouldn't make a plan look "recent."
-3. Sorted-view as source of truth. When user deletes/favorites, we mutate the displayed sorted array. Keep
-studyLibraryEntries (c:\nbs\abible\keyboard.js:121)
-as the master raw list and studyLibrarySortedView as the rendered projection. Re-derive on every mutation (cheap at N≤100).
-Other notes:
-Letter-key gate must check
-key.length === 1 && /^[a-z]$/i.test(key) (c:\nbs\abible\keyboard.js:418)
-to avoid swallowing things like Tab/Home.
-View-mode persistence: validate the loaded value against the allowed set; if garbage, fall back to `'recent'`.
-Distinct tones: ascending pin =
-playTone(660 → 880) (c:\nbs\abible\keyboard.js:22)
-two-tone, but a single 880 sine is fine. Use 440 for unpin.
-Now the diffs.
-planCache.js (/c:/nbs/abible/jit/planCache.js)
-Replacing 26 lines with 37 lines in planCache.js
+Searched codebase for "Role: Expert Developer
+Context: We are making a small accessibility refinement to the JIT Search "busy" heartbeat sound in keyboard.js. We previously tried to update it to an 800Hz tone, but we used the playTone function instead of the playEcho function required for the "Lifeboat Event" sound profile.
+Task:
+Please provide the surgical diffs to correct the startHeartbeatPulse() function in keyboard.js and ensure the required audio functions are imported.
+Required Changes in keyboard.js:
+Update the imports from `./audio.js` to include `playEcho` alongside the existing imports (like `playTone`, `cycleVolume`, etc.).
+Update the `startHeartbeatPulse()` function to use the `playEcho` function.
+Here is what the target function should look like:
+function startHeartbeatPulse() {
+    if (heartbeatInterval) return;
+    heartbeatInterval = setInterval(() => {
+        // Sound 24: Lifeboat Event (800Hz sine with 0.3s echo delay)
+        playEcho('sine', 800, null, 0.1, 0.4, 0.3);
+    }, 2500);
+}", 16 results. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.output.txt, c:\nbs\abible\.rules\jit-feature.md, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\audio.js, c:\nbs\abible\audio.js, c:\nbs\abible\autoplay.js, c:\nbs\abible\gemini.md, c:\nbs\abible\index.html, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js
+Thinking: Let me find the current audio.js imports in keyboard.js first.
+Searched for text from &#39;./audio.js&#39; (**/keyboard.js), 1 result. Files: c:\nbs\abible\keyboard.js
+Read keyboard.js, lines 19 to 25
+Replacing 10 lines with 10 lines in keyboard.js
 ```
 ```
 ```
 ```
-Add setFavorite, getFavoriteCount, and a FAVORITE_HARD_CAP constant. Append after
-remove() (c:\nbs\abible\jit\planCache.js:211)
-:
-Replacing 14 lines with 84 lines in planCache.js
-```
-```
-```
-```
-Also coerce
-isFavorite (c:\nbs\abible\jit\planCache.js:165)
-on read so old v3 records present a defined boolean. Patch
-getAllSorted (c:\nbs\abible\jit\planCache.js:186)
-:
-Replacing 10 lines with 16 lines in planCache.js
-```
-```
-```
-```
-keyboard.js (/c:/nbs/abible/keyboard.js)
-First, expand imports and add view-state and the visual/TTS-aware
-formatLibraryEntry (c:\nbs\abible\keyboard.js:316)
-:
-Replacing 1 lines with 1 lines in keyboard.js
-```
-```
-```
-```
-Add view-state. Update the state block:
-Replacing 6 lines with 10 lines in keyboard.js
-```
-```
-```
-```
-Update
-clearAllModes (c:\nbs\abible\keyboard.js:136)
-reset:
-Replacing 3 lines with 4 lines in keyboard.js
-```
-```
-```
-```
-Now refactor
-formatLibraryEntry (c:\nbs\abible\keyboard.js:321)
-to support { visual } and add the sort-helper + view-mode persistence helpers. Replace the existing helper:
-Replacing 16 lines with 68 lines in keyboard.js
-```
-```
-```
-```
-Now update the Shift+G launcher to load persisted sort mode and seed the sorted view:
-Replacing 13 lines with 22 lines in keyboard.js
-```
-```
-```
-```
-Now refactor the library mode handler block to use
-studyLibrarySortedView (c:\nbs\abible\keyboard.js:122)
-as source of truth, plus add Left/Right, K toggle, and letter-key navigation. Let me view the current block to do a precise replacement:
-Searched for text if (isStudyLibraryMode) { (**/keyboard.js), 1 result. Files: c:\nbs\abible\keyboard.js
-Read keyboard.js, lines 1247 to 1370
-Now do a wholesale replacement of the library handler block:
-Replacing 104 lines with 229 lines in keyboard.js
-```
-```
-```
-```
-Checked keyboard.js, planCache.js, no problems found
-v69.2 complete. Summary of surgical changes:
-planCache.js (/c:/nbs/abible/jit/planCache.js)
-**
-evictIfOverCap (c:\nbs\abible\jit\planCache.js:114)
-**: Cursor now skips records with
-isFavorite === true (c:\nbs\abible\jit\planCache.js:165)
-. Added
-scanned (c:\nbs\abible\jit\planCache.js:159)
-cap to guarantee termination even if every remaining record is pinned.
-**
-getAllSorted (c:\nbs\abible\jit\planCache.js:186)
-**: Coerces missing
-isFavorite (c:\nbs\abible\jit\planCache.js:165)
-to false on read (lazy migration; no
-SCHEMA_VERSION (c:\nbs\abible\jit\planCache.js:21)
-bump).
-**New
-setFavorite(cacheKey, bool) (c:\nbs\abible\jit\planCache.js:251)
-**: Atomic read-modify-write; deliberately does NOT touch
-lastAccessed (c:\nbs\abible\jit\planCache.js:111)
-(pinning ≠ recency).
-**New
-getFavoriteCount() (c:\nbs\abible\jit\planCache.js:283)
-**: Full-scan cursor returning the pinned count (bounded by soft cap, trivial cost).
-**New
-FAVORITE_HARD_CAP = 20 (c:\nbs\abible\jit\planCache.js:238)
-** exported constant.
-keyboard.js (/c:/nbs/abible/keyboard.js)
-**Imports**: Added
-setCachedFavorite (c:\nbs\abible\keyboard.js:27)
-,
-getCachedFavoriteCount (c:\nbs\abible\keyboard.js:27)
-,
-FAVORITE_HARD_CAP (c:\nbs\abible\jit\planCache.js:238)
+Both changes applied —
+playEcho (c:\nbs\abible\keyboard.js:22)
+added to the
+audio.js (/c:/nbs/abible/audio.js)
+import, and
+startHeartbeatPulse (c:\nbs\abible\keyboard.js:183)
+now calls
+playEcho('sine', 800, null, 0.1, 0.4, 0.3) (c:\nbs\abible\keyboard.js:22)
 .
-**State**: Added
-studyLibrarySortedView (c:\nbs\abible\keyboard.js:122)
-(rendered projection),
-currentSortMode (c:\nbs\abible\keyboard.js:123)
-,
-STUDY_SORT_MODES (c:\nbs\abible\keyboard.js:124)
-,
-STUDY_SORT_STORAGE_KEY (c:\nbs\abible\keyboard.js:125)
-.
-clearAllModes (c:\nbs\abible\keyboard.js:136)
-resets both lists.
-**Helpers**:
-formatLibraryEntry(entry, { visual }) (c:\nbs\abible\keyboard.js:323)
-now emits ★ glyph for sighted and &quot;Pinned. &quot; word prefix for TTS. Added
-deriveStudyLibraryView (c:\nbs\abible\keyboard.js:343)
-,
-loadPersistedSortMode (c:\nbs\abible\keyboard.js:360)
-,
-persistSortMode (c:\nbs\abible\keyboard.js:369)
-,
-describeSortMode (c:\nbs\abible\keyboard.js:374)
-,
-renderStudyLibrary (c:\nbs\abible\keyboard.js:380)
-.
-**Shift+G launcher**: Loads persisted sort mode, derives initial view, falls back to `'recent'` if Favorites is empty, announces full nav hints (K, Delete, Left/Right, Enter, Escape).
-**Library handler refactor**:
-studyLibrarySortedView (c:\nbs\abible\keyboard.js:122)
-is now the single source of truth.
-**Left/Right**: Cycle `recent` → `alpha` → `favorites`, persist, re-derive, reset index, announce.
-**K**: Cap-checked toggle. Optimistic mutate + fire-and-forget
-setCachedFavorite (c:\nbs\abible\keyboard.js:27)
-. Distinct tones (880 ↑ pin / 440 ↓ unpin) followed by &quot;Pinned.&quot; | &quot;Unpinned.&quot;. In Favorites view, unpinning removes the entry from view.
-**Delete**: Mirrors v69.1 but operates against the sorted view and master list separately so views stay consistent.
-**Letter-key nav**: Strict-gated to
-currentSortMode === 'alpha' (c:\nbs\abible\keyboard.js:123)
-and
-/^[a-z]$/i (c:\nbs\abible\keyboard.js:346)
-. Forward-wrapping linear scan.
-**Empty-view guard**: Allows Left/Right/Escape only when the current view yields zero entries (handles unpin-to-empty in Favorites).
-No errors.

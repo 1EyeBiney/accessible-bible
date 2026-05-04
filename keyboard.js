@@ -19,7 +19,7 @@ import {
     memoryCache, db, bookmarksCache, loadToMemory 
 } from './db.js';
 import { 
-    playNextTrack, cycleVolume, playTone, silenceBootAudio 
+    playNextTrack, cycleVolume, playTone, playEcho, silenceBootAudio 
 } from './audio.js';
 import { startAutoPlay, pauseAutoPlay, stopAutoPlay, isAutoPlaying, autoPlaySettings, curatedVoices, playAutoPlayUI, saveAutoPlaySettings } from './autoplay.js';
 import { helpMenuData, NOTES_STORE, COMMENTARY_STORE, THEMES, muteTutorialPrompt, setMuteTutorialPrompt, DB_NAME } from './config.js';
@@ -183,8 +183,8 @@ export function setCurrentSearchResultIndex(val) { currentSearchResultIndex = va
 function startHeartbeatPulse() {
     if (heartbeatInterval) return;
     heartbeatInterval = setInterval(() => {
-        // Subtle, low, short — perceptible but ignorable beneath TTS.
-        playTone(220, 'sine', 0.05, 0.08);
+        // Sound 24: Lifeboat Event (800Hz sine with 0.3s echo delay)
+        playEcho('sine', 800, null, 0.1, 0.4, 0.3);
     }, 2500);
 }
 
