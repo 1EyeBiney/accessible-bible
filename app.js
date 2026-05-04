@@ -11,7 +11,7 @@ import {
     audioCtx, audioA, audioB, activeAudio, currentVolumeIndex, crossfadeTimer
 } from './audio.js';
 import { db, memoryCache, bookmarksCache, initDatabase, loadBookmarks, loadToMemory, setMemoryCache } from './db.js';
-import { handleInput, clearAllModes, setSearchMode, setNoteMode, getSearchMode, getNoteMode, setSearchResults, setCurrentSearchResultIndex, updateSearchVisualBuffer, clearVisualBuffer, updateVisualBuffer, isJitInputMode, isJitLoading } from './keyboard.js';
+import { handleInput, clearAllModes, setSearchMode, setNoteMode, getSearchMode, getNoteMode, setSearchResults, setCurrentSearchResultIndex, updateSearchVisualBuffer, clearVisualBuffer, updateVisualBuffer, isJitInputMode, isJitLoading, isVaultInputMode } from './keyboard.js';
 
 export { memoryCache };
 
@@ -618,7 +618,7 @@ window.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => speak("Press Enter to begin."), 1000);
 
     focusTrap.addEventListener('blur', () => {
-        if (isInitialized && !getSearchMode() && !getNoteMode() && !isWelcomeMode && !isTutorialMode && !isJitInputMode && !isJitLoading) {
+        if (isInitialized && !getSearchMode() && !getNoteMode() && !isWelcomeMode && !isTutorialMode && !isJitInputMode && !isJitLoading && !isVaultInputMode) {
             requestAnimationFrame(() => focusTrap.focus());
         }
     });

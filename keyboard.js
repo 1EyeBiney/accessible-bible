@@ -23,6 +23,11 @@ import {
 import { startAutoPlay, pauseAutoPlay, stopAutoPlay, isAutoPlaying, autoPlaySettings, curatedVoices, playAutoPlayUI, saveAutoPlaySettings } from './autoplay.js';
 import { helpMenuData, NOTES_STORE, COMMENTARY_STORE, THEMES, muteTutorialPrompt, setMuteTutorialPrompt } from './config.js';
 import { generateStudyPlan } from './jit/orchestrator.js';
+import { getKey, setKey, clearKey, hasKey, redactedDisplay } from './jit/vault.js';
+
+// Active BYOK provider. Single-source-of-truth for R-3 wiring; R-7 will
+// promote this to a runtime selector across multiple providers.
+const ACTIVE_PROVIDER = 'gemini';
 
 const visualBuffer = document.getElementById('visual-buffer');
 
@@ -80,6 +85,7 @@ export let isVerseMode = false;
 export let isSearchMode = false;
 export let isNoteMode = false;
 export let isOptionsMenuMode = false;
+export let isVaultInputMode = false;
 export let isAutoPlayMenuMode = false;
 export let isLibraryMode = false;
 export let libraryManifest = [];
@@ -125,6 +131,7 @@ export function clearAllModes() {
     }
     isBookSearchMode = false; isChapterMode = false; isVerseMode = false;
     isSearchMode = false; isNoteMode = false; isOptionsMenuMode = false; isAutoPlayMenuMode = false;
+    isVaultInputMode = false;
     isLibraryMode = false;
     isVersionMode = false;
     isHelpMode = false; isHelpMenuMode = false; isKeyboardExplorer = false;
@@ -424,6 +431,7 @@ export function handleInput(event) {
     const isMenuMode = (typeof isHelpMenuMode !== 'undefined' && isHelpMenuMode) ||
                        (typeof isAutoPlayMenuMode !== 'undefined' && isAutoPlayMenuMode) ||
                        (typeof isOptionsMenuMode !== 'undefined' && isOptionsMenuMode) ||
+                       (typeof isVaultInputMode !== 'undefined' && isVaultInputMode) ||
                        (typeof isLibraryMode !== 'undefined' && isLibraryMode);
 
     if (isHelpMenuMode) {
@@ -860,6 +868,50 @@ export function handleInput(event) {
                 return;
             }
             if (selected === 'Import Personal Notes') { importFileEl.click(); isOptionsMenuMode = false; return; }
+
+            // --- BYOK Vault entries -------------------------------------------------
+            if (selected === 'Save Gemini Key' || selected.startsWith('Replace Gemini Key')) {
+                clearAllModes();
+                isVaultInputMode = true;
+                if (!searchInputEl) { speak("Input unavailable."); return; }
+                searchInputEl.value = '';
+                searchInputEl.placeholder = 'Paste Gemini API key, then Enter';
+                searchInputEl.type = 'password';
+                speak("Enter Gemini API key. Paste then press Enter, or Escape to cancel.");
+                setTimeout(() => searchInputEl.focus(), 10);
+
+                const vaultInputHandler = async (e) => {
+                    if (e.key !== 'Enter' && e.key !== 'Escape') return;
+                    e.preventDefault();
+                    const raw = searchInputEl.value || '';
+                    searchInputEl.value = '';
+                    searchInputEl.placeholder = '';
+                    searchInputEl.type = 'text';
+                    searchInputEl.removeEventListener('keydown', vaultInputHandler);
+                    activeInputHandler = null;
+                    isVaultInputMode = false;
+                    if (e.key === 'Escape') { speak("Key entry cancelled."); return; }
+                    try {
+                        const redacted = await setKey(ACTIVE_PROVIDER, raw);
+                        const last4 = redacted.replace(/^•+\s*/, '');
+                        speak(`Gemini key saved, ending in ${last4}.`);
+                    } catch (err) {
+                        speak("Empty key rejected. Please try again from the Options Menu.");
+                    }
+                };
+                activeInputHandler = vaultInputHandler;
+                searchInputEl.addEventListener('keydown', vaultInputHandler);
+                return;
+            }
+
+            if (selected === 'Clear Gemini Key') {
+                isOptionsMenuMode = false;
+                clearKey(ACTIVE_PROVIDER)
+                    .then(() => speak("Gemini key cleared."))
+                    .catch(() => speak("Could not clear key."));
+                return;
+            }
+            // --- end BYOK Vault entries ---------------------------------------------
 
             // Omni-Jump Selection Link Handling
             if (/^\[\[.*\]\]$/.test(selected)) {
@@ -1344,12 +1396,23 @@ export function handleInput(event) {
             event.preventDefault();
             if (!isReady) break;
             clearAllModes();
-            isOptionsMenuMode = true;
-            menuOptions = ['Export Personal Notes', 'Import Personal Notes', 'Boot Location: ' + bootPreference];
-            currentMenuIndex = 0;
-            currentMenuTitle = "OPTIONS MENU";
-            renderMenuVisuals(currentMenuTitle, menuOptions, currentMenuIndex);
-            speak("Options Menu. 1 of 3: Export Personal Notes. Up and down arrows to navigate, Enter to select, Escape to close.");
+            (async () => {
+                const keyPresent = await hasKey(ACTIVE_PROVIDER);
+                const baseOpts = ['Export Personal Notes', 'Import Personal Notes', 'Boot Location: ' + bootPreference];
+                if (keyPresent) {
+                    const redacted = await redactedDisplay(ACTIVE_PROVIDER);
+                    baseOpts.push(`Replace Gemini Key (${redacted})`);
+                    baseOpts.push('Clear Gemini Key');
+                } else {
+                    baseOpts.push('Save Gemini Key');
+                }
+                isOptionsMenuMode = true;
+                menuOptions = baseOpts;
+                currentMenuIndex = 0;
+                currentMenuTitle = "OPTIONS MENU";
+                renderMenuVisuals(currentMenuTitle, menuOptions, currentMenuIndex);
+                speak(`Options Menu. 1 of ${menuOptions.length}: Export Personal Notes. Up and down arrows to navigate, Enter to select, Escape to close.`);
+            })();
             break;
         case 'A':
             event.preventDefault();
