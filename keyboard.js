@@ -219,7 +219,8 @@ export async function triggerJitStudyPlan(topic, filter = '') {
     }, 30000);
 
     try {
-        const plan = await generateStudyPlan(topic, filter, {
+        const manifestId = (typeof localStorage !== 'undefined' && localStorage.getItem('currentBibleFile')) || 'default';
+        const plan = await generateStudyPlan(topic, filter, manifestId, {
             signal: jitAbortController.signal
         });
 

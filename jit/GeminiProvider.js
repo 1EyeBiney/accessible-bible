@@ -6,6 +6,7 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { classifySensitivity, buildPromptHardener, loadCuratedFallback } from "./sensitivity.js";
 import { SafetyError, NetworkError, AuthError, QuotaError, ParsingError } from "./errors.js";
+import { GEMINI_MODEL } from "../config.js";
 
 // Define the Strict JSON Schema (Now featuring closing_reflection)
 const studyPlanSchema = {
@@ -46,7 +47,7 @@ export class GeminiProvider {
         }
         this.genAI = new GoogleGenerativeAI(apiKey);
         this.model = this.genAI.getGenerativeModel({
-            model: "gemini-2.5-flash",
+            model: GEMINI_MODEL,
             generationConfig: {
                 responseMimeType: "application/json",
                 responseSchema: studyPlanSchema,
@@ -55,7 +56,7 @@ export class GeminiProvider {
         });
     }
 
-    async fetchPlan(topic, filter) {
+    async fetchPlan(topic, filter, { signal } = {}) {
         // 1. The Semantic Safety Catch
         const sensitivity = classifySensitivity(topic);
         
@@ -73,9 +74,24 @@ export class GeminiProvider {
         Ensure your verse references are accurate and your commentary is deeply encouraging but concise.
         ${hardener}`; // The hardener dynamically injects rules for elevated topics
 
-        // 3. Execute the API Call
+        // 3. Pre-flight abort check
+        if (signal?.aborted) {
+            throw new DOMException('Aborted before request', 'AbortError');
+        }
+
+        // 4. Execute the API Call (race against abort signal)
         try {
-            const result = await this.model.generateContent(prompt);
+            const apiCall = this.model.generateContent(prompt);
+            const result = signal
+                ? await Promise.race([
+                    apiCall,
+                    new Promise((_, reject) => {
+                        const onAbort = () => reject(new DOMException(signal.reason?.message || 'Aborted', 'AbortError'));
+                        if (signal.aborted) onAbort();
+                        else signal.addEventListener('abort', onAbort, { once: true });
+                    })
+                  ])
+                : await apiCall;
             const responseText = result.response.text();
             
             // 4. Parse the output (The Garbage Collector)

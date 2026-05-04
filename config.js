@@ -8,6 +8,7 @@ export const API_KEYS_STORE = "apiKeys";
 export const STUDYPLANS_STORE = "studyPlans";
 export const PLAN_CACHE_SOFT_CAP = 100;
 export const SCHEMA_VERSION = "v1";
+export const GEMINI_MODEL = "gemini-2.5-flash";
 export let muteTutorialPrompt = localStorage.getItem('muteTutorialPrompt') === 'true';
 export function setMuteTutorialPrompt(val) { muteTutorialPrompt = val; }
 
