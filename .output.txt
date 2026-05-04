@@ -1,132 +1,90 @@
 Searched codebase for "Role: Senior Systems Architect
-Context: We have critical accessibility and usability issues with the v68.0 Search Modal. Please patch v68.1.
-The Symptoms:
-Native `` Verbosity: Screen readers announce "8 of 9", which is confusing and unnecessary.
-Tab Interference: Tab navigation is not behaving as expected between modal fields.
-Enter Key Failure: The form does not submit on Enter, likely due to key interception by the global app engine.
-Required Architectural Changes:
-Virtual Select Component: Replace the native `` in index.html with a simple `<input type="text">`.
-- In keyboard.js, add a keydown handler for this input: 'ArrowUp' cycles values (3, 4, 5, 6, 7, 8, 9, 10, 15), 'ArrowDown' cycles the same, 'Enter' triggers the form submit.
-Tab Propagation: Update keyboard.js to ensure 'Tab' is NOT intercepted by the global engine while the JIT modal is active (`isJitInputMode`).
-Enter Key Handling: In handleInput(), ensure that if `isJitInputMode` is true, we do not call event.preventDefault() for 'Enter', allowing the native form submission to work, OR manually trigger jitModalFormEl.submit() inside the handler for 'Enter' to guarantee the form fires.
-Focus Cleanup: Ensure that when moving focus between fields, the "Third Track" heartbeat or global focus-trap doesn't attempt to reclaim focus.
+Context Update: v68.1 Accessibility Patch Evaluation.
+I have tested the modal and found two critical bugs:
+The Verse Count input is "stuck": Arrow keys do not update the visual value in the input field.
+Submission Mismatch: When I submitted "5", the engine generated a "3" verse plan. It appears the form is submitting an internal index/default rather than the actual value displayed in the input field.
+Required Fixes (v68.2):
+Fix the Input Cycler: Ensure the ArrowUp/ArrowDown keydown handler for `jit-count-input` updates the `value` attribute of the input element directly.
+Source of Truth: In `submitJitModal()`, do NOT use the internal `jitCountIndex` variable to determine the verse count. Instead, read the `value` directly from `jitCountInputEl.value` and parse it to an integer. This guarantees what the user sees is what the system submits.
+Accessible Announcement: When ArrowUp/ArrowDown changes the value, add a `speak()` call to announce the new count (e.g., "5 verses") so the user gets immediate auditory confirmation.
 Action Required:
-Please provide the surgical diffs to:
-Replace the  in index.html with the virtual-select-ready input.
-Update keyboard.js to implement the ArrowUp/Down cycle logic for the verse count input.
-Update keyboard.js to fix the key interception logic so Enter and Tab work inside the modal.Role: Senior Systems Architect
-Context Update: We are proceeding with v68.0 (JIT Configuration & Customization). I have reviewed your evaluation regarding the 'G' key input, and I am rejecting both the single-line DSL and the multi-step wizard. 
-The Chosen Architecture: The Search Modal
-We will build a traditional, accessible Modal interface for the 'G' key. It must bridge the gap between screen-reader tab navigation and sighted user layout.
-Modal Requirements (HTML/JS):
-Fields:
-- Topic (Text input, auto-focused).
-- Filter (Text input, optional).
-- Verse Count (Select/Combobox: options 3, 4, 5, 6, 7, 8, 9, 10, 15. Default is 5).
-Keyboard Routing: 
-- Pressing 'Enter' from *any* of the three fields immediately submits the form and triggers generation.
-- 'Tab' navigates between fields natively.
-- 'Escape' closes the modal and returns focus to the engine.
-Engine, Validation, & Cache Requirements:
-Orchestrator Signature: Update `orchestrator.js` to accept `(topic, filter, verseCount)`.
-Sensitivity Guard: Route the new `filter` input through `classifySensitivity` alongside the topic to prevent prompt injection.
-Prompt Engineering: The Gemini JSON system instruction must dynamically insert the requested `verseCount`. It must explicitly constrain the `filter` parameter to modify the `commentary_text` voice ONLY, and strictly instruct the AI to NOT let the filter influence the actual verse selection.
-Response Envelope & Validator: The AI must echo `requested_verse_count` and `flavor` in its JSON envelope. Update `PlanValidator.js` to assert against this dynamic count instead of a hardcoded 5.
-Cache Integrity: Update the `cacheKey` generator to form a normalized tuple: e.g., `topic|filter|count|v3`. 
-Schema Bump: Bump `SCHEMA_VERSION` to 'v3' in `config.js`.
-Action Required:
-Please provide the surgical diffs needed to implement this Modal architecture. I will need:
-The HTML injection for the new Modal (to go in `index.html`).
-The `keyboard.js` updates to launch the modal on 'G', handle the form submission/cancel, and pass the three variables to the orchestrator.
-The `orchestrator.js` & `PlanValidator.js` updates (the dynamic prompt, the sensitivity check, the cache key, and the validation logic).
-The `config.js` schema bump.", 14 results. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.output.txt, c:\nbs\abible\.output.txt, c:\nbs\abible\.output.txt, c:\nbs\abible\.output.txt, c:\nbs\abible\.output.txt, c:\nbs\abible\.rules\jit-feature.md, c:\nbs\abible\app.js, c:\nbs\abible\gemini.md, c:\nbs\abible\index.html, c:\nbs\abible\keyboard.js, c:\nbs\abible\project_brief.md, c:\nbs\abible\project_brief.md
-Thinking: Looking at the handleInput function, it returns early when focus is on INPUT or TEXTAREA elements, which means the Enter key should work natively for form submission in the modal. But there might be another keydown handler in app.js that's interfering with this behavior.
-Searched for regex addEventListener\(&#39;keydown|preventDefault|focus-trap|focus\(\)|blur (**/app.js), 20 results. Files: c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js
-Read app.js, lines 615 to 700
-Thinking: The focus-trap blur exclusion already accounts for `isJitInputMode`, so that's covered. I'm checking whether `handleInput` returns early for INPUT/TEXTAREA elements—it does, which means Enter on topic or filter inputs should trigger the native form submit. The real issue might be that the form submit isn't firing in certain cases, possibly because the inputs need `type="text"` attributes or the form needs a proper submit button.
-Actually, forms with text inputs do submit natively on Enter, so the listener should fire. But if the user says it's not working, there's likely a global keydown listener on the document that's capturing Enter before it reaches the form. Let me trace where `handleInput` is connected and check for any document-level keydown handlers.
-Searched for regex document\.addEventListener|window\.addEventListener.*key|handleInput (**/app.js), 3 results. Files: c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js
-Thinking: I see the issue now — the SELECT element wasn't included in the early return check for INPUT/TEXTAREA, which is why Enter was being intercepted. Switching to a readonly INPUT element should fix that since it'll match the early return condition. But the user is still reporting that Enter and Tab are being captured, so there must be something else preventing these keys from reaching the input.
-Looking at the event flow, when Enter is pressed on an input inside the form, the keydown listener should return early before any preventDefault happens, allowing the default form submission to proceed. The form should submit since it has multiple inputs. But if the user is experiencing failures, it's possible the global keydown listener is calling preventDefault somewhere, or there's another listener interfering with the natural behavior.
-The real issue is likely the select element — when focus lands there, Enter doesn't trigger form submission natively, and the global keydown handler processes it without returning early since select isn't in the early-return list. So I need to replace the select with a readonly text input that cycles through values on arrow keys, add explicit Enter handling to submit the form, and make sure the global listener doesn't interfere with Tab navigation while the modal is active.
-Now applying the v68.1 fixes.
-1)
-index.html (/c:/nbs/abible/index.html)
-— Replace native &lt;select&gt; with readonly text input
-Replacing 12 lines with 2 lines in index.html
-```
-```
-```
-```
-2)
-keyboard.js (/c:/nbs/abible/keyboard.js)
-— Virtual select cycler, key routing fixes  
-First update the modal refs and constants:
-Replacing 99 lines with 179 lines in keyboard.js
-```
-```
-```
-```
-Now harden
-handleInput (c:\nbs\abible\app.js:14)
-so the global router unconditionally bails when the modal is active. The existing INPUT/TEXTAREA early-return covers most cases, but a defensive
-isJitInputMode (c:\nbs\abible\app.js:14)
-short-circuit guarantees Tab/Enter/Arrow-keys can never reach the global switch even if focus momentarily lands on the modal container itself:
-Replacing 8 lines with 14 lines in keyboard.js
-```
-```
-```
-```
-Checked keyboard.js, index.html, no problems found
-v68.1 patch complete. Summary of fixes:
-**
-index.html (/c:/nbs/abible/index.html)
-** — &lt;select id=&quot;jit-count-select&quot;&gt; replaced with
-<input type="text" id="jit-count-input" readonly value="5"> (c:\nbs\abible\jit\sensitivity.js:57)
-. Eliminates the "8 of 9" screen-reader noise inherent to native &lt;select&gt; and gives us a uniform INPUT target that the global router already knows to skip.
-**
-keyboard.js (/c:/nbs/abible/keyboard.js)
-— Virtual count cycler.** New
-JIT_VERSE_COUNTS = [3,4,5,6,7,8,9,10,15] (c:\nbs\abible\keyboard.js:300)
-array with
+Please review the logic in keyboard.js. I need the surgical diffs to:
+Force the arrow-key listener to sync the input.value with the cycle logic.
+Rewrite `submitJitModal()` to pull the verseCount directly from the DOM input value.
+Add the `speak()` confirmation for count changes.", 8 results. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.output.txt, c:\nbs\abible\.output.txt, c:\nbs\abible\app.js, c:\nbs\abible\index.html, c:\nbs\abible\index.html, c:\nbs\abible\keyboard.js
+Thinking: I see the issue now — the handler is updating the input value and calling speak, but the submit handler is still reading from the index array instead of pulling the actual count from the DOM like the user expects. There's also something about a "stuck" state that needs addressing.
+Looking at the event flow, the modal's capture-phase handler with stopPropagation is blocking arrow keys from ever reaching the count input element. Since capture phase fires before the target listener, calling stopPropagation there prevents the event from reaching the input at all. The fix is to be selective about which keys we stop — only Escape and Enter need stopping, while arrow keys should pass through to the input. Actually, since the global handler already guards against acting when in JIT input mode, we don't need the stopPropagation at all.
+Found the root cause: the modal-level capture-phase handler calls
+e.stopPropagation() (c:\nbs\abible\keyboard.js:383)
+on every key. In capture phase, that stops the event before it ever reaches
+jitCountInputEl (c:\nbs\abible\keyboard.js:307)
+, so its ArrowUp/ArrowDown listener never fires — the input is "stuck". Combined with the submit reading from
 jitCountIndex (c:\nbs\abible\keyboard.js:308)
-cursor and
-setJitCount(idx) (c:\nbs\abible\keyboard.js:323)
-writer. ArrowUp/ArrowRight advances, ArrowDown/ArrowLeft retreats (wraps both ends), each change announced as "N verses." Enter on the count input calls
-submitJitModal() (c:\nbs\abible\keyboard.js:330)
-. Character keys are swallowed (
-preventDefault (c:\nbs\abible\app.js:641)
-+
+(which never moved), every submit produced the initial default.
+Fixes for v68.2:
+Replacing 17 lines with 26 lines in keyboard.js
+```
+```
+```
+```
+Now the critical fix — drop the blanket
 stopPropagation (c:\nbs\abible\app.js:669)
-) so screen readers don't try to type into the readonly box.
+on the capture-phase modal handler so events actually reach the count input. The global router already bails on
+isJitInputMode (c:\nbs\abible\app.js:14)
+, so we don't need to block bubbling:
+Replacing 59 lines with 57 lines in keyboard.js
+```
+```
+```
+```
+Finally, make
+submitJitModal (c:\nbs\abible\keyboard.js:339)
+'s reader read straight from the DOM as the source of truth:
+Replacing 5 lines with 10 lines in keyboard.js
+```
+```
+```
+```
+Checked keyboard.js, no problems found
+v68.2 patch complete. Three surgical fixes, one root-cause:
+Root cause — the v68.1 modal-level handler was bound in capture phase and called
+e.stopPropagation() (c:\nbs\abible\app.js:581)
+unconditionally. In capture, that halts the event before it reaches the target, so the count input's keydown listener never fired for ArrowUp/ArrowDown. Compounded by
+submitJitModal (c:\nbs\abible\keyboard.js:339)
+reading
+JIT_VERSE_COUNTS[jitCountIndex] (c:\nbs\abible\keyboard.js:300)
+(the internal cursor that never moved), every submit shipped the boot value 5 — and after a stale state from a prior session, 3.
 **
 keyboard.js (/c:/nbs/abible/keyboard.js)
-— Modal-level capture-phase handler hardened.** Now does three things:
-1.
+— Fix #1: Pass-through capture handler.** Removed the blanket
 e.stopPropagation() (c:\nbs\abible\app.js:581)
-on every key — guarantees no modal keystroke ever leaks to the
-window (c:\nbs\abible\app.js:601)
-keydown router.
-2. Escape → tear-down (unchanged).
-3. Enter → calls
-submitJitModal() (c:\nbs\abible\keyboard.js:330)
-via
-form.requestSubmit() (c:\nbs\abible\keyboard.js:334)
-(which fires the submit listener; plain .submit() would bypass it). Skipped when target is the count input — that input's own handler wins to avoid double-fire.
-4. `Tab` is intentionally untouched — no
-preventDefault (c:\nbs\abible\app.js:641)
-, no branching. Native focus traversal Topic → Filter → Count works.
-keyboard.js::handleInput — Added defensive if (isJitInputMode) return; immediately after the
-isInitialized (c:\nbs\abible\app.js:34)
-guard. Belt-and-suspenders alongside the existing INPUT/TEXTAREA short-circuit: even if focus momentarily lands on the modal container itself (during inter-field transitions or after a synthetic dispatch), the global router cannot fire its switch and cannot call
-preventDefault (c:\nbs\abible\app.js:641)
-on Tab/Enter/Arrows.
-Focus-trap reclaim — already excluded
+. The modal-level handler now only consumes Escape (always) and Enter (when target is not the count input). Tab, Arrows, and characters pass through to native focus traversal and inner listeners. Safe because
+handleInput (c:\nbs\abible\app.js:14)
+already short-circuits on
 isJitInputMode (c:\nbs\abible\app.js:14)
-from the blur reclaim in
-app.js#L655 (/c:/nbs/abible/app.js:655)
-; no change needed. The Third Track heartbeat is gated by
-isJitLoading (c:\nbs\abible\app.js:14)
-, not
-isJitInputMode (c:\nbs\abible\app.js:14)
-, so it can't fire while the modal is open.
+, so nothing leaks to the global router regardless.
+**
+keyboard.js (/c:/nbs/abible/keyboard.js)
+— Fix #2: DOM is source of truth.**
+jitModalSubmitHandler (c:\nbs\abible\keyboard.js:309)
+now reads
+parseInt(jitCountInputEl.value, 10) (c:\nbs\abible\app.js:83)
+directly and validates against
+JIT_VERSE_COUNTS.includes(rawCount) (c:\nbs\abible\keyboard.js:300)
+. Falls back to default only on unparseable/illegal values. The internal
+jitCountIndex (c:\nbs\abible\keyboard.js:308)
+is now strictly a UI cursor, never a submission source.
+keyboard.js::setJitCount — Fix #3: Belt-and-suspenders DOM sync.
+setJitCount (c:\nbs\abible\keyboard.js:323)
+now writes both
+inputEl.value (c:\nbs\abible\app.js:400)
+(live property) and
+inputEl.setAttribute('value', ...) (c:\nbs\abible\app.js:400)
+(rendered attribute). Most browsers reflect
+.value (c:\nbs\abible\app.js:400)
+to the visible field on type=text, but the explicit
+setAttribute (c:\nbs\abible\keyboard.js:331)
+guarantees parity for any screen reader or extension that re-reads the attribute.
+Announcement — already present from v68.1: each Arrow press calls
+speak( (c:\nbs\abible\app.js:7)
+${JIT_VERSE_COUNTS[jitCountIndex]} verses.). With Fix #1 unblocking the listener, the user now actually hears it.

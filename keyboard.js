@@ -324,7 +324,16 @@ function setJitCount(idx) {
     if (!jitCountInputEl) return;
     const len = JIT_VERSE_COUNTS.length;
     jitCountIndex = ((idx % len) + len) % len;
-    jitCountInputEl.value = String(JIT_VERSE_COUNTS[jitCountIndex]);
+    const next = JIT_VERSE_COUNTS[jitCountIndex];
+    // Sync BOTH the live property and the rendered attribute so the
+    // value the user sees (and submit reads) is the value we just set.
+    jitCountInputEl.value = String(next);
+    jitCountInputEl.setAttribute('value', String(next));
+}
+
+function setJitCountByValue(n) {
+    const idx = JIT_VERSE_COUNTS.indexOf(parseInt(n, 10));
+    setJitCount(idx >= 0 ? idx : JIT_VERSE_COUNTS.indexOf(JIT_DEFAULT_COUNT));
 }
 
 function submitJitModal() {
@@ -374,16 +383,16 @@ function openJitModal() {
 
     // Capture-phase keydown on the modal root.
     //   - Escape: tear down (must beat anything else).
-    //   - Enter:  force form submit (some screen readers swallow native
-    //             implicit submit on text inputs, and the readonly count
-    //             input would never submit on its own).
-    //   - Tab:    let it propagate natively (do NOT preventDefault).
-    //   stopPropagation() on every key prevents the global window keydown
-    //   handler from acting on modal keystrokes.
+    //   - Enter on non-count fields: force form submit.
+    //   - Everything else: PASS THROUGH untouched. We must NOT call
+    //     stopPropagation() in capture phase, or events never reach
+    //     the inner listeners (e.g. the count input's Arrow handler).
+    //     The global window keydown router already short-circuits on
+    //     isJitInputMode, so leakage is impossible.
     jitModalKeydownHandler = (e) => {
-        e.stopPropagation();
         if (e.key === 'Escape') {
             e.preventDefault();
+            e.stopPropagation();
             closeJitModal(true);
             return;
         }
@@ -393,11 +402,12 @@ function openJitModal() {
             // letting the count handler win when it's the target.
             if (e.target === jitCountInputEl) return;
             e.preventDefault();
+            e.stopPropagation();
             submitJitModal();
             return;
         }
-        // Tab and all other keys: do nothing. Native focus traversal
-        // between Topic → Filter → Count handles itself.
+        // Tab, Arrows, character keys: do nothing. Native focus
+        // traversal and inner listeners take over.
     };
     jitModalEl.addEventListener('keydown', jitModalKeydownHandler, true);
 
@@ -407,17 +417,14 @@ function openJitModal() {
     jitCountKeydownHandler = (e) => {
         if (e.key === 'ArrowUp' || e.key === 'ArrowRight') {
             e.preventDefault();
-            e.stopPropagation();
             setJitCount(jitCountIndex + 1);
             speak(`${JIT_VERSE_COUNTS[jitCountIndex]} verses.`);
         } else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
             e.preventDefault();
-            e.stopPropagation();
             setJitCount(jitCountIndex - 1);
             speak(`${JIT_VERSE_COUNTS[jitCountIndex]} verses.`);
         } else if (e.key === 'Enter') {
             e.preventDefault();
-            e.stopPropagation();
             submitJitModal();
         } else if (e.key === 'Tab' || e.key === 'Escape') {
             // Let the modal-level handler (Escape) or native focus
@@ -425,9 +432,9 @@ function openJitModal() {
             return;
         } else {
             // Block character keys from being typed into the readonly
-            // input and block them from leaking to the global handler.
+            // input. No need to stopPropagation — global router is gated
+            // on isJitInputMode.
             e.preventDefault();
-            e.stopPropagation();
         }
     };
     jitCountInputEl.addEventListener('keydown', jitCountKeydownHandler);
@@ -436,7 +443,12 @@ function openJitModal() {
         e.preventDefault();
         const topic = (jitTopicInputEl.value || '').trim();
         const filter = (jitFilterInputEl.value || '').trim();
-        const verseCount = JIT_VERSE_COUNTS[jitCountIndex] || JIT_DEFAULT_COUNT;
+        // Source of truth: read directly from the DOM input. Never trust
+        // the internal jitCountIndex — the user sees and submits whatever
+        // is actually rendered. Fall back to default only if the DOM
+        // value is unparseable or outside the allowed set.
+        const rawCount = parseInt((jitCountInputEl.value || '').trim(), 10);
+        const verseCount = JIT_VERSE_COUNTS.includes(rawCount) ? rawCount : JIT_DEFAULT_COUNT;
 
         if (!topic) {
             speak("Topic is required.");
