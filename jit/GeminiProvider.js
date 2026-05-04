@@ -8,33 +8,37 @@ import { classifySensitivity, buildPromptHardener, loadCuratedFallback } from ".
 import { SafetyError, NetworkError, AuthError, QuotaError, ParsingError } from "./errors.js";
 import { GEMINI_MODEL } from "../config.js";
 
-// v2 Strict JSON Schema — Third Track contract.
-// Plan = { topic, summary, verses: [exactly 5] }
-const studyPlanSchema = {
-    type: SchemaType.OBJECT,
-    properties: {
-        topic:   { type: SchemaType.STRING, description: "User's study topic, restated concisely." },
-        summary: { type: SchemaType.STRING, description: "2 to 3 sentence overview of the study arc." },
-        verses: {
-            type: SchemaType.ARRAY,
-            minItems: 5,
-            maxItems: 5,
-            items: {
-                type: SchemaType.OBJECT,
-                properties: {
-                    step: { type: SchemaType.INTEGER },
-                    book_name: { type: SchemaType.STRING },
-                    chapter: { type: SchemaType.INTEGER },
-                    verse: { type: SchemaType.INTEGER },
-                    expected_text_snippet: { type: SchemaType.STRING },
-                    commentary_text: { type: SchemaType.STRING }
-                },
-                required: ["step", "book_name", "chapter", "verse", "expected_text_snippet", "commentary_text"]
+// v3 Strict JSON Schema — built per-request so verseCount is dynamic.
+// Plan = { topic, summary, requested_verse_count, flavor, verses: [exactly N] }
+function buildStudyPlanSchema(verseCount) {
+    return {
+        type: SchemaType.OBJECT,
+        properties: {
+            topic:   { type: SchemaType.STRING, description: "User's study topic, restated concisely." },
+            summary: { type: SchemaType.STRING, description: "2 to 3 sentence overview of the study arc." },
+            requested_verse_count: { type: SchemaType.INTEGER, description: "Echo of the verse count requested by the user." },
+            flavor: { type: SchemaType.STRING, description: "Echo of the homiletic-voice filter, or empty string if none." },
+            verses: {
+                type: SchemaType.ARRAY,
+                minItems: verseCount,
+                maxItems: verseCount,
+                items: {
+                    type: SchemaType.OBJECT,
+                    properties: {
+                        step: { type: SchemaType.INTEGER },
+                        book_name: { type: SchemaType.STRING },
+                        chapter: { type: SchemaType.INTEGER },
+                        verse: { type: SchemaType.INTEGER },
+                        expected_text_snippet: { type: SchemaType.STRING },
+                        commentary_text: { type: SchemaType.STRING }
+                    },
+                    required: ["step", "book_name", "chapter", "verse", "expected_text_snippet", "commentary_text"]
+                }
             }
-        }
-    },
-    required: ["topic", "summary", "verses"]
-};
+        },
+        required: ["topic", "summary", "requested_verse_count", "flavor", "verses"]
+    };
+}
 
 export class GeminiProvider {
     constructor(apiKey) {
@@ -45,44 +49,60 @@ export class GeminiProvider {
             });
         }
         this.genAI = new GoogleGenerativeAI(apiKey);
-        this.model = this.genAI.getGenerativeModel({
+        this.apiKey = apiKey;
+    }
+
+    _getModel(verseCount) {
+        return this.genAI.getGenerativeModel({
             model: GEMINI_MODEL,
             generationConfig: {
                 responseMimeType: "application/json",
-                responseSchema: studyPlanSchema,
+                responseSchema: buildStudyPlanSchema(verseCount),
                 temperature: 0.7,
             }
         });
     }
 
-    async fetchPlan(topic, filter, { signal } = {}) {
-        // 1. The Semantic Safety Catch
+    async fetchPlan(topic, filter, verseCount, { signal } = {}) {
+        // 1. The Semantic Safety Catch (topic is the primary vector;
+        //    filter sensitivity is enforced at the orchestrator layer).
         const sensitivity = classifySensitivity(topic);
-        
+
         if (sensitivity.level === 'critical') {
             console.warn(`[Safety Intercept] Critical topic detected: ${sensitivity.matched}`);
             return loadCuratedFallback(sensitivity.level); // Return the safe, hardcoded JSON
         }
 
         const hardener = buildPromptHardener(sensitivity.level);
+        const safeFilter = (typeof filter === 'string' ? filter.trim() : '');
 
-        // 2. Build the Prompt
+        // 2. Build the Prompt.
+        //    Filter is STRICTLY constrained to commentary voice; verse selection
+        //    must be driven by topic alone so the validator's fuzzy match
+        //    against memoryCache remains meaningful.
+        const filterClause = safeFilter
+            ? `STYLE FILTER: Render every commentary_text in the homiletic voice and theological cadence of "${safeFilter}". The filter modifies COMMENTARY VOICE ONLY. The filter MUST NOT influence which verses you select; verse selection is driven exclusively by the topic. Do not let "${safeFilter}" steer you toward that author's preferred proof-texts. Echo the filter back in the "flavor" field.`
+            : `No style filter requested. Set the "flavor" field to an empty string.`;
+
         const prompt = `You are a biblical study guide generator.
-        The user needs a Bible study plan about: ${topic}.
-        Filter the theological tone through the lens of: ${filter}.
-        Return EXACTLY 5 verses, ordered as a coherent study arc, with each verse's expected_text_snippet drawn from a literal English translation.
-        The 'topic' field should restate the user's topic concisely. The 'summary' field should be 2 to 3 sentences describing the study arc.
-        Ensure verse references are accurate and commentary is deeply encouraging but concise.
-        ${hardener}`;
+The user needs a Bible study plan about: ${topic}.
+Return EXACTLY ${verseCount} verses, ordered as a coherent study arc, with each verse's expected_text_snippet drawn from a literal English translation.
+Set "requested_verse_count" to ${verseCount}.
+The "topic" field should restate the user's topic concisely. The "summary" field should be 2 to 3 sentences describing the study arc.
+Ensure verse references are accurate and commentary is deeply encouraging but concise.
+${filterClause}
+${hardener}`;
 
         // 3. Pre-flight abort check
         if (signal?.aborted) {
             throw new DOMException('Aborted before request', 'AbortError');
         }
 
+        const model = this._getModel(verseCount);
+
         // 4. Execute the API Call (race against abort signal)
         try {
-            const apiCall = this.model.generateContent(prompt);
+            const apiCall = model.generateContent(prompt);
             const result = signal
                 ? await Promise.race([
                     apiCall,

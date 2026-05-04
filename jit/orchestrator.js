@@ -14,12 +14,30 @@ import { memoryCache } from '../db.js';
 import { SCHEMA_VERSION, GEMINI_MODEL } from '../config.js';
 
 const ACTIVE_PROVIDER = 'gemini';
+const VERSE_COUNT_MIN = 3;
+const VERSE_COUNT_MAX = 15;
+const VERSE_COUNT_DEFAULT = 5;
 
-export async function generateStudyPlan(topic, filter, manifestId, { signal } = {}) {
-    // 1. Synchronous Safety Check
-    const sensitivity = classifySensitivity(topic);
-    if (sensitivity.level === 'critical') {
-        return loadCuratedFallback(sensitivity.matched);
+function clampVerseCount(n) {
+    const v = parseInt(n, 10);
+    if (!Number.isFinite(v)) return VERSE_COUNT_DEFAULT;
+    return Math.min(VERSE_COUNT_MAX, Math.max(VERSE_COUNT_MIN, v));
+}
+
+export async function generateStudyPlan(topic, filter, verseCount, manifestId, { signal } = {}) {
+    const safeCount = clampVerseCount(verseCount);
+
+    // 1. Synchronous Safety Check — run on BOTH topic and filter.
+    //    Filter is a second prompt-injection vector; treat it identically.
+    const sensitivityTopic = classifySensitivity(topic);
+    if (sensitivityTopic.level === 'critical') {
+        return loadCuratedFallback(sensitivityTopic.matched);
+    }
+    if (filter) {
+        const sensitivityFilter = classifySensitivity(filter);
+        if (sensitivityFilter.level === 'critical') {
+            return loadCuratedFallback(sensitivityFilter.matched);
+        }
     }
 
     // 2. Cache lookup (re-validates internally; miss or poison → null).
@@ -28,6 +46,7 @@ export async function generateStudyPlan(topic, filter, manifestId, { signal } = 
     const cacheKey = buildCacheKey({
         topic,
         filter,
+        count: safeCount,
         model: GEMINI_MODEL,
         schemaVersion: SCHEMA_VERSION,
         manifestId: manifestId || 'default',
@@ -48,12 +67,12 @@ export async function generateStudyPlan(topic, filter, manifestId, { signal } = 
     let plan;
     try {
         const provider = new GeminiProvider(apiKey);
-        
-        // Fetch raw JSON from Gemini 
-        const rawPlan = await provider.fetchPlan(topic, filter, { signal }); 
-        
+
+        // Fetch raw JSON from Gemini
+        const rawPlan = await provider.fetchPlan(topic, filter, safeCount, { signal });
+
         const validator = new PlanValidator(memoryCache);
-        plan = validator.validate(rawPlan);
+        plan = validator.validate(rawPlan, { requestedCount: safeCount, requestedFilter: filter || null });
         
     } catch (err) {
         // Re-throw typed errors directly
@@ -88,7 +107,7 @@ export async function generateStudyPlan(topic, filter, manifestId, { signal } = 
 
     // 5. Persist to plan cache. Fire-and-forget; cache failure must not
     //    block returning a validated plan to the engine.
-    cachePut(cacheKey, plan, { topic, filter, model: GEMINI_MODEL })
+    cachePut(cacheKey, plan, { topic, filter, verseCount: safeCount, model: GEMINI_MODEL })
         .catch((err) => console.warn('[orchestrator] planCache.put failed:', err?.message || err));
 
     return { plan, cacheKey };

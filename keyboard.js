@@ -140,6 +140,12 @@ export function clearAllModes() {
     isVersionMode = false;
     isHelpMode = false; isHelpMenuMode = false; isKeyboardExplorer = false;
     isJitInputMode = false;
+    // Defensive: if the JIT modal is open when another mode forces a
+    // mode-clear (e.g. mid-prompt translation switch), tear it down.
+    const jitModal = document.getElementById('jit-modal');
+    if (jitModal && jitModal.style.display !== 'none') {
+        try { closeJitModal(false); } catch (_) { jitModal.style.display = 'none'; }
+    }
     currentMenuTitle = "";
     inputBuffer = ''; lastSearchLetter = '';
     lastBookSearchKey = '';
@@ -202,7 +208,7 @@ function isStudyPlanError(err) {
     return !!(err && typeof err === 'object' && typeof err.userMessage === 'string');
 }
 
-export async function triggerJitStudyPlan(topic, filter = '') {
+export async function triggerJitStudyPlan(topic, filter = '', verseCount = 5) {
     if (isJitLoading) return;            // Re-entry guard.
     if (!topic || !topic.trim()) {
         speak("No topic provided.");
@@ -231,7 +237,7 @@ export async function triggerJitStudyPlan(topic, filter = '') {
 
     try {
         const manifestId = (typeof localStorage !== 'undefined' && localStorage.getItem('currentBibleFile')) || 'default';
-        const { plan, cacheKey } = await generateStudyPlan(topic, filter, manifestId, {
+        const { plan, cacheKey } = await generateStudyPlan(topic, filter, verseCount, manifestId, {
             signal: jitAbortController.signal
         });
 
@@ -285,6 +291,104 @@ export function abortActiveJit(reason) {
         catch (_) { try { jitAbortController.abort(); } catch (_) {} }
     }
     clearActivePlan(reason || 'external');
+}
+
+// =====================================================================
+// JIT Study Plan — Search Modal (v68.0)
+// =====================================================================
+
+let jitModalEl = null;
+let jitModalFormEl = null;
+let jitTopicInputEl = null;
+let jitFilterInputEl = null;
+let jitCountSelectEl = null;
+let jitModalSubmitHandler = null;
+let jitModalKeydownHandler = null;
+
+function ensureJitModalRefs() {
+    if (jitModalEl) return true;
+    jitModalEl = document.getElementById('jit-modal');
+    jitModalFormEl = document.getElementById('jit-modal-form');
+    jitTopicInputEl = document.getElementById('jit-topic-input');
+    jitFilterInputEl = document.getElementById('jit-filter-input');
+    jitCountSelectEl = document.getElementById('jit-count-select');
+    return !!(jitModalEl && jitModalFormEl && jitTopicInputEl && jitFilterInputEl && jitCountSelectEl);
+}
+
+export function closeJitModal(announce = false) {
+    if (!ensureJitModalRefs()) return;
+    if (jitModalSubmitHandler) {
+        jitModalFormEl.removeEventListener('submit', jitModalSubmitHandler);
+        jitModalSubmitHandler = null;
+    }
+    if (jitModalKeydownHandler) {
+        jitModalEl.removeEventListener('keydown', jitModalKeydownHandler, true);
+        jitModalKeydownHandler = null;
+    }
+    jitModalEl.style.display = 'none';
+    jitTopicInputEl.value = '';
+    jitFilterInputEl.value = '';
+    jitCountSelectEl.value = '5';
+    isJitInputMode = false;
+    document.getElementById('focus-trap')?.focus();
+    if (announce) speak("Study plan cancelled.");
+}
+
+function openJitModal() {
+    if (!ensureJitModalRefs()) {
+        speak("Study plan modal is unavailable.");
+        return;
+    }
+    isJitInputMode = true;
+    jitTopicInputEl.value = '';
+    jitFilterInputEl.value = '';
+    jitCountSelectEl.value = '5';
+    jitModalEl.style.display = 'flex';
+
+    // Enter from any field submits the form natively. Capture-phase Escape
+    // tears the modal down regardless of which field has focus.
+    jitModalKeydownHandler = (e) => {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            closeJitModal(true);
+        }
+    };
+    jitModalEl.addEventListener('keydown', jitModalKeydownHandler, true);
+
+    jitModalSubmitHandler = (e) => {
+        e.preventDefault();
+        const topic = (jitTopicInputEl.value || '').trim();
+        const filter = (jitFilterInputEl.value || '').trim();
+        const verseCount = parseInt(jitCountSelectEl.value, 10) || 5;
+
+        if (!topic) {
+            speak("Topic is required.");
+            jitTopicInputEl.focus();
+            return;
+        }
+
+        // Tear down modal state BEFORE dispatching, so isJitLoading takes over
+        // the focus-trap exclusion cleanly.
+        if (jitModalSubmitHandler) {
+            jitModalFormEl.removeEventListener('submit', jitModalSubmitHandler);
+            jitModalSubmitHandler = null;
+        }
+        if (jitModalKeydownHandler) {
+            jitModalEl.removeEventListener('keydown', jitModalKeydownHandler, true);
+            jitModalKeydownHandler = null;
+        }
+        jitModalEl.style.display = 'none';
+        isJitInputMode = false;
+        document.getElementById('focus-trap')?.focus();
+
+        triggerJitStudyPlan(topic, filter, verseCount);
+    };
+    jitModalFormEl.addEventListener('submit', jitModalSubmitHandler);
+
+    // Defer focus by one tick so any synchronous blur reclaim from
+    // clearAllModes() settles before the topic input takes focus.
+    setTimeout(() => jitTopicInputEl.focus(), 10);
 }
 
 // =====================================================================
@@ -1415,45 +1519,10 @@ export function handleInput(event) {
             break;
         case 'G': {
             event.preventDefault();
-            if (!isReady || !searchInputEl) break;
+            if (!isReady) break;
             clearAllModes();
-            isJitInputMode = true;
-            searchInputEl.value = '';
-            updateVisualBuffer("STUDY PLAN", "Type a topic, then press Enter. Escape to cancel.");
-            speak("Study plan. Type a topic and press Enter to generate. Press Escape to cancel.");
-
-            // Defer focus by one tick so any synchronous blur reclaim from
-            // clearAllModes() settles before we hand off to the input element.
-            setTimeout(() => searchInputEl.focus(), 10);
-
-            const jitInputHandler = (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const topic = (searchInputEl.value || '').trim();
-                    searchInputEl.value = '';
-                    searchInputEl.removeEventListener('keydown', jitInputHandler);
-                    activeInputHandler = null;
-                    isJitInputMode = false;
-                    document.getElementById('focus-trap')?.focus();
-                    if (topic) {
-                        triggerJitStudyPlan(topic);
-                    } else {
-                        speak("Cancelled. No topic entered.");
-                        clearVisualBuffer();
-                    }
-                } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    searchInputEl.value = '';
-                    searchInputEl.removeEventListener('keydown', jitInputHandler);
-                    activeInputHandler = null;
-                    isJitInputMode = false;
-                    document.getElementById('focus-trap')?.focus();
-                    speak("Study plan cancelled.");
-                    clearVisualBuffer();
-                }
-            };
-            activeInputHandler = jitInputHandler;
-            searchInputEl.addEventListener('keydown', jitInputHandler);
+            speak("Study plan. Topic, filter, and verse count. Tab between fields. Press Enter to generate. Escape to cancel.");
+            openJitModal();
             break;
         }
         case 'O':

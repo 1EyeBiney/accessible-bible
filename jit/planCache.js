@@ -34,16 +34,18 @@ function slugify(part) {
 }
 
 /**
- * Composite cache key. Order locked: topic|filter|model|schemaVersion|manifestId.
+ * Composite cache key. Order locked: topic|filter|count|model|schemaVersion|manifestId.
  * Bumping SCHEMA_VERSION cleanly invalidates the entire cache.
  */
-export function buildCacheKey({ topic, filter, model, schemaVersion, manifestId }) {
+export function buildCacheKey({ topic, filter, count, model, schemaVersion, manifestId }) {
     if (!topic || typeof topic !== 'string') {
         throw new Error('planCache: topic required for cache key.');
     }
+    const safeCount = Number.isFinite(Number(count)) ? String(Number(count)) : '5';
     return [
         slugify(topic),
         slugify(filter || 'none'),
+        safeCount,
         slugify(model || 'unknown'),
         slugify(schemaVersion || SCHEMA_VERSION),
         slugify(manifestId || 'default'),

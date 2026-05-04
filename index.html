@@ -91,6 +91,33 @@
         <input type="file" id="import-file" class="sr-only" accept=".json">
         <input type="file" id="import-commentary-file" class="sr-only" accept=".json">
 
+        <!-- JIT Study Plan Modal (v68.0) -->
+        <div id="jit-modal" role="dialog" aria-modal="true" aria-labelledby="jit-modal-title" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 2500; background: rgba(0,0,0,0.6); justify-content: center; align-items: center;">
+            <form id="jit-modal-form" style="background: var(--bg-color); color: var(--text-color); border: 3px solid var(--accent-color); border-radius: 10px; padding: 30px 40px; min-width: 480px; max-width: 90vw; box-shadow: 0 6px 24px rgba(0,0,0,0.6); display: flex; flex-direction: column; gap: 18px;">
+                <h2 id="jit-modal-title" style="margin: 0; color: var(--accent-color); text-transform: uppercase; letter-spacing: 2px; font-size: 1.6rem;">Generate Study Plan</h2>
+                <p id="jit-modal-instructions" style="margin: 0; font-size: 1.1rem; opacity: 0.85;">Tab to move between fields. Press Enter from any field to generate. Press Escape to cancel.</p>
+
+                <label for="jit-topic-input" style="font-size: 1.2rem; font-weight: bold;">Topic</label>
+                <input type="text" id="jit-topic-input" name="topic" required autocomplete="off" aria-required="true" style="font-size: 1.3rem; padding: 10px; background: var(--bg-color); color: var(--text-color); border: 2px solid var(--text-color); border-radius: 4px;">
+
+                <label for="jit-filter-input" style="font-size: 1.2rem; font-weight: bold;">Filter <span style="font-weight: normal; opacity: 0.7;">(optional — e.g., Spurgeon, Moody)</span></label>
+                <input type="text" id="jit-filter-input" name="filter" autocomplete="off" style="font-size: 1.3rem; padding: 10px; background: var(--bg-color); color: var(--text-color); border: 2px solid var(--text-color); border-radius: 4px;">
+
+                <label for="jit-count-select" style="font-size: 1.2rem; font-weight: bold;">Verse Count</label>
+                <select id="jit-count-select" name="verseCount" style="font-size: 1.3rem; padding: 10px; background: var(--bg-color); color: var(--text-color); border: 2px solid var(--text-color); border-radius: 4px;">
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5" selected>5</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                    <option value="8">8</option>
+                    <option value="9">9</option>
+                    <option value="10">10</option>
+                    <option value="15">15</option>
+                </select>
+            </form>
+        </div>
+
         <div id="content-display" aria-hidden="true">
             </div>
 
