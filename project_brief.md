@@ -1,4 +1,4 @@
-brief_version: 1.1
+brief_version: 1.2
 
 ## §0 AGENT DIRECTIVES
 - Read this file end-to-end on session boot. Recite §11 in first reply.
@@ -18,8 +18,8 @@ brief_version: 1.1
 - Host: GitHub Pages, www.accessible-bible.org. License: MIT.
 - Stack: static ES modules, no bundler, IndexedDB, Web Speech API, AudioContext, importmap.
 - Active cycle: Update Cycle 2 — JIT Study Plan pipeline.
-- App version: v66.0. Brief version: 1.1.
-- Active task: R-3 Vault UX — wire vault into Options menu (Save/Replace/Clear).
+- App version: v66.1. Brief version: 1.2.
+- Active task: R-5 Cycle 2 close — hand validated plan to autoplay engine.
 - IndexedDB: BibleStudyDB v7. apiKeys + studyPlans stores added; user stores preserved.
 - BYOK: user supplies Gemini key, stored locally; no hosted key, no telemetry.
 - gemini.md is the engine rulebook; do not contradict it.
@@ -108,6 +108,11 @@ brief_version: 1.1
 - D-028 `F12` for Keyboard Explorer (not `K`) to avoid bookmark-key collision.
 - D-029 No mid-task save-state writes; save-state only on completed roadmap items, invariant changes, or explicit user request.
 - D-030 No emojis in chat output by default.
+- D-031 BYOK provider literal centralized at call sites as `ACTIVE_PROVIDER` const (orchestrator.js, keyboard.js). R-7 promotes to runtime selector.
+- D-032 `GEMINI_MODEL` lives in `config.js`; both orchestrator and provider import from a single source.
+- D-033 Cache lookup runs BEFORE vault key check in orchestrator. Key-less users may replay cached plans offline.
+- D-034 `manifestId` passed as orchestrator parameter (not read from localStorage inside JIT context). Inner Wall stays decoupled from app-level storage.
+- D-035 GeminiProvider races `generateContent` against `signal.addEventListener('abort')` for true cancellation.
 
 ## §7 PREFERENCES
 - Surgical edits over file rewrites.
@@ -145,6 +150,8 @@ brief_version: 1.1
 - H-016 `clearAllModes()` invoked after a new mode flag is set will wipe the new mode. Always call before flipping.
 - H-017 Importmap not honored if Content-Type wrong on host. Verify on first deploy.
 - H-018 Long-running JIT calls without AbortController orphan promises after page unload.
+- H-019 Pre-R-4 orchestrator signature `(topic, filter, apiKey, memoryCache, opts)` did not match the keyboard.js call site `(topic, filter, opts)` — JIT was non-functional in v66.0. Fixed in R-4 by aligning signature to call. Lesson: type the public API of bounded contexts at the seam, not internally.
+- H-020 SDK `generateContent` does not natively honor AbortSignal. Must race against a manual abort listener or the 30 s timeout orphans the request.
 
 ## §9 CORE FILES
 - `app.js` — Engine, RAM cache, DB orchestration, focus trap, splash/welcome/tutorial lifecycle.
@@ -194,17 +201,17 @@ brief_version: 1.1
 - Watchdog Directive — gemini.md, the operational rulebook for engine behavior.
 
 ## §11 CURRENT STATUS
-- Active task: R-3 Vault UX — wire `jit/vault.js` into the Options menu (Save/Replace/Clear key + redacted readout).
-- App version: v66.0. Brief version: 1.1.
-- Last completed: R-1 `jit/vault.js` + R-2 `jit/planCache.js` (headless leaf modules; Spoke contracts honored).
-- Blockers: none — OQ-7 resolved (immediate overwrite + TTS announce).
-- Awaiting: R-3 diff approval.
+- Active task: R-5 Cycle 2 close — hand validated plan to autoplay engine.
+- App version: v66.1. Brief version: 1.2.
+- Last completed: R-3 Vault UX (Options menu Save/Replace/Clear + redacted readout) + R-4 orchestrator wiring (vault, planCache read-through, signal propagation, manifestId param). JIT pipeline now functional end-to-end for the first time.
+- Blockers: none.
+- Awaiting: R-5 diff (autoplay engine plan handoff).
 
 ## §12 ROADMAP
 - [x] R-1 Build `jit/vault.js` (getKey/setKey/clearKey/redactedDisplay/hasKey).
 - [x] R-2 Build `jit/planCache.js` (buildCacheKey/get/put/evictIfOverCap).
-- [ ] R-3 Wire vault into Options menu UX (Save/Replace/Clear key, redacted readout).
-- [ ] R-4 Wire orchestrator → vault (pre-call) and planCache (read-through).
+- [x] R-3 Wire vault into Options menu UX (Save/Replace/Clear key, redacted readout).
+- [x] R-4 Wire orchestrator → vault (pre-call) and planCache (read-through). Includes signal propagation, GEMINI_MODEL config promotion, manifestId parameter.
 - [ ] R-5 Cycle 2 close: Task 2.7 engine integration — hand validated plan to autoplay.
 - [ ] R-6 Cycle 3: post-launch hardening — encryption envelope for vault.
 - [ ] R-7 Cycle 3: multi-provider abstraction (Anthropic, OpenAI).
@@ -222,6 +229,7 @@ brief_version: 1.1
 - OQ-8 Cache re-validation — RESOLVED: PlanValidator re-runs on every `get()`; failure evicts the record and returns null. (R-2)
 
 ## §14 SESSION LOG
+- S-2026-05-04 R-3 + R-4 shipped: Options menu now exposes Save/Replace/Clear Gemini Key with redacted readout (`isVaultInputMode` + B1 listener + password-type input toggle). Orchestrator wired to vault + planCache; cache-before-vault for offline replay; manifestId now a parameter; GEMINI_MODEL promoted to config.js; AbortSignal propagated through GeminiProvider via Promise.race. Pre-R-4 signature mismatch fixed. App bumped v66.0 → v66.1.
 - S-2026-05-04 R-1 + R-2 shipped: `jit/vault.js` (headless, no UI coupling, plaintext + reserved keyEnvelope) and `jit/planCache.js` (re-validate on read, lazy LRU on get + put, console.warn on poisoned records). Spoke contracts honored end-to-end.
 - S-2026-05-04 v1.0 brief locked: Hub-and-Spoke architecture spec adopted; gemini.md/.changelog.md/.roadmap.txt ingested; project_brief.md v1.0 cut.
 - S-2026-05-04 v66.0 brief-architecture session: locked Hub-and-Spoke spec, completed Phase 2 interview, drafted brief v0.1.
