@@ -1,32 +1,37 @@
-Searched codebase for "Role: Expert Developer
-Context: We are making a small accessibility refinement to the JIT Search "busy" heartbeat sound in keyboard.js. We previously tried to update it to an 800Hz tone, but we used the playTone function instead of the playEcho function required for the "Lifeboat Event" sound profile.
-Task:
-Please provide the surgical diffs to correct the startHeartbeatPulse() function in keyboard.js and ensure the required audio functions are imported.
-Required Changes in keyboard.js:
-Update the imports from `./audio.js` to include `playEcho` alongside the existing imports (like `playTone`, `cycleVolume`, etc.).
-Update the `startHeartbeatPulse()` function to use the `playEcho` function.
-Here is what the target function should look like:
-function startHeartbeatPulse() {
-    if (heartbeatInterval) return;
-    heartbeatInterval = setInterval(() => {
-        // Sound 24: Lifeboat Event (800Hz sine with 0.3s echo delay)
-        playEcho('sine', 800, null, 0.1, 0.4, 0.3);
-    }, 2500);
-}", 16 results. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.output.txt, c:\nbs\abible\.rules\jit-feature.md, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\audio.js, c:\nbs\abible\audio.js, c:\nbs\abible\autoplay.js, c:\nbs\abible\gemini.md, c:\nbs\abible\index.html, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js
-Thinking: Let me find the current audio.js imports in keyboard.js first.
-Searched for text from &#39;./audio.js&#39; (**/keyboard.js), 1 result. Files: c:\nbs\abible\keyboard.js
-Read keyboard.js, lines 19 to 25
-Replacing 10 lines with 10 lines in keyboard.js
-```
-```
-```
-```
-Both changes applied —
-playEcho (c:\nbs\abible\keyboard.js:22)
-added to the
+Searched codebase for "i got this error on load: Engine Error: Uncaught SyntaxError: The requested module './audio.js' does not provide an export named 'playEcho' on line 22", 12 results. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.output.txt, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\audio.js, c:\nbs\abible\audio.js, c:\nbs\abible\autoplay.js, c:\nbs\abible\config.js, c:\nbs\abible\gemini.md, c:\nbs\abible\index.html, c:\nbs\abible\keyboard.js
+Thinking: Let me look at what audio.js exports to see what's available to work with.
+Searched for regex ^export|playEcho|echo (**/audio.js), 15 results. Files: c:\nbs\abible\audio.js, c:\nbs\abible\audio.js, c:\nbs\abible\audio.js, c:\nbs\abible\audio.js, c:\nbs\abible\audio.js, c:\nbs\abible\audio.js, c:\nbs\abible\audio.js, c:\nbs\abible\audio.js, c:\nbs\abible\audio.js, c:\nbs\abible\audio.js, c:\nbs\abible\audio.js, c:\nbs\abible\audio.js, c:\nbs\abible\audio.js, c:\nbs\abible\audio.js, c:\nbs\abible\audio.js
+Thinking: I notice the audio.js file is missing a playEcho function, so I need to add it by following the same pattern used in playTone.
 audio.js (/c:/nbs/abible/audio.js)
-import, and
-startHeartbeatPulse (c:\nbs\abible\keyboard.js:183)
-now calls
-playEcho('sine', 800, null, 0.1, 0.4, 0.3) (c:\nbs\abible\keyboard.js:22)
+has no
+playEcho (c:\nbs\abible\keyboard.js:22)
+export. I'll add it, modeled on
+playTone (c:\nbs\abible\keyboard.js:22)
 .
+Read audio.js, lines 17 to 45
+Now add
+playEcho (c:\nbs\abible\keyboard.js:22)
+after
+playTone (c:\nbs\abible\audio.js:22)
+. Signature per the spec:
+playEcho(type, freq, _unused, dur, vol, echoDelay) (c:\nbs\abible\keyboard.js:22)
+.
+Replacing 14 lines with 62 lines in audio.js
+```
+```
+```
+```
+Checked audio.js, no problems found
+Fixed. The
+playEcho (c:\nbs\abible\audio.js:52)
+function didn't exist in
+audio.js (/c:/nbs/abible/audio.js)
+— only
+playTone (c:\nbs\abible\audio.js:22)
+,
+playSequence (c:\nbs\abible\audio.js:85)
+, and a few cue-specific helpers were exported. Added a new
+playEcho(type, freq, _unused, dur, vol, echoDelay) (c:\nbs\abible\audio.js:52)
+that schedules a primary tone followed by a half-volume echo at
+echoDelay (c:\nbs\abible\audio.js:52)
+seconds. Reload should clear the error.
