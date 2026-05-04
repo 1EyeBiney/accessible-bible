@@ -24,7 +24,7 @@ import {
 import { startAutoPlay, pauseAutoPlay, stopAutoPlay, isAutoPlaying, autoPlaySettings, curatedVoices, playAutoPlayUI, saveAutoPlaySettings } from './autoplay.js';
 import { helpMenuData, NOTES_STORE, COMMENTARY_STORE, THEMES, muteTutorialPrompt, setMuteTutorialPrompt, DB_NAME } from './config.js';
 import { generateStudyPlan } from './jit/orchestrator.js';
-import { getAllSorted as getAllCachedPlans, remove as removeCachedPlan } from './jit/planCache.js';
+import { getAllSorted as getAllCachedPlans, remove as removeCachedPlan, setFavorite as setCachedFavorite, getFavoriteCount as getCachedFavoriteCount, FAVORITE_HARD_CAP } from './jit/planCache.js';
 import { getKey, setKey, clearKey, hasKey, redactedDisplay } from './jit/vault.js';
 import {
     getActivePlan, setActivePlan, clearActivePlan,
@@ -118,7 +118,11 @@ export let hasHeardJumpInstructions = false;
 export let isJitLoading = false;
 export let isJitInputMode = false;
 export let isStudyLibraryMode = false;
-let studyLibraryEntries = [];   // [{ cacheKey, plan, meta, ... }]
+let studyLibraryEntries = [];   // master list, raw lastAccessed-DESC order
+let studyLibrarySortedView = []; // current rendered projection
+let currentSortMode = 'recent';  // 'recent' | 'alpha' | 'favorites'
+const STUDY_SORT_MODES = ['recent', 'alpha', 'favorites'];
+const STUDY_SORT_STORAGE_KEY = 'studyLibrarySortMode';
 let jitAbortController = null;
 let heartbeatInterval = null;
 let jitTimeoutId = null;
@@ -146,6 +150,7 @@ export function clearAllModes() {
     isJitInputMode = false;
     isStudyLibraryMode = false;
     studyLibraryEntries = [];
+    studyLibrarySortedView = [];
     // Defensive: if the JIT modal is open when another mode forces a
     // mode-clear (e.g. mid-prompt translation switch), tear it down.
     const jitModal = document.getElementById('jit-modal');
@@ -309,11 +314,13 @@ const JIT_VERSE_COUNTS = [3, 4, 5, 6, 7, 8, 9, 10, 15];
 const JIT_DEFAULT_COUNT = 5;
 
 /**
- * Library entry label (v69.0). Renders Topic / Filter / Count for the
- * Shift+G recall menu. Both the visual list and the TTS announcement
- * use this same string so sighted and blind users hear/see identically.
+ * Library entry label (v69.0, extended v69.2).
+ *
+ * @param {Object} entry  — { cacheKey, plan, meta, isFavorite, ... }
+ * @param {Object} [opts]
+ * @param {boolean} [opts.visual=false]  — true → use ★ glyph; false → "Pinned. " word prefix for TTS
  */
-function formatLibraryEntry(entry) {
+function formatLibraryEntry(entry, opts = {}) {
     if (!entry || !entry.plan) return 'Empty entry';
     const plan = entry.plan;
     const topic = plan.topic || (entry.meta && entry.meta.topic) || 'Untitled';
@@ -322,7 +329,57 @@ function formatLibraryEntry(entry) {
         ? plan.actual_verse_count
         : (Array.isArray(plan.verses) ? plan.verses.length : 0);
     const filterPart = filter ? `, filter ${filter}` : '';
-    return `${topic} (${count} verses${filterPart})`;
+    const body = `${topic} (${count} verses${filterPart})`;
+    if (entry.isFavorite === true) {
+        return opts.visual ? `★ ${body}` : `Pinned. ${body}`;
+    }
+    return body;
+}
+
+/**
+ * Pure sort/filter projection for the Study Library. Returns a new
+ * array; never mutates input. Source of truth for the rendered list.
+ */
+function deriveStudyLibraryView(entries, mode) {
+    if (!Array.isArray(entries) || entries.length === 0) return [];
+    if (mode === 'alpha') {
+        return entries.slice().sort((a, b) => {
+            const ta = (a.plan?.topic || '').toLowerCase();
+            const tb = (b.plan?.topic || '').toLowerCase();
+            return ta.localeCompare(tb, undefined, { sensitivity: 'base' });
+        });
+    }
+    if (mode === 'favorites') {
+        // Already lastAccessed DESC from getAllSorted(); just filter.
+        return entries.filter(e => e.isFavorite === true);
+    }
+    // 'recent' is identity — getAllSorted returned lastAccessed DESC.
+    return entries.slice();
+}
+
+function loadPersistedSortMode() {
+    try {
+        const v = localStorage.getItem(STUDY_SORT_STORAGE_KEY);
+        return STUDY_SORT_MODES.includes(v) ? v : 'recent';
+    } catch (_) {
+        return 'recent';
+    }
+}
+
+function persistSortMode(mode) {
+    try { localStorage.setItem(STUDY_SORT_STORAGE_KEY, mode); }
+    catch (_) { /* private mode, ignore */ }
+}
+
+function describeSortMode(mode, viewLen, totalLen) {
+    if (mode === 'alpha')     return `View: Alphabetical. ${viewLen} plan${viewLen === 1 ? '' : 's'}.`;
+    if (mode === 'favorites') return `View: Favorites. ${viewLen} of ${totalLen} pinned.`;
+    return `View: Recent. ${viewLen} plan${viewLen === 1 ? '' : 's'}.`;
+}
+
+function renderStudyLibrary() {
+    const labels = studyLibrarySortedView.map(e => formatLibraryEntry(e, { visual: true }));
+    renderMenuVisuals(currentMenuTitle, labels, currentMenuIndex);
 }
 
 let jitModalEl = null;
@@ -1193,6 +1250,7 @@ export function handleInput(event) {
         if (key === 'Escape') {
             isStudyLibraryMode = false;
             studyLibraryEntries = [];
+            studyLibrarySortedView = [];
             currentMenuIndex = 0;
             currentMenuTitle = "";
             clearVisualBuffer();
@@ -1200,52 +1258,175 @@ export function handleInput(event) {
             return;
         }
 
-        if (studyLibraryEntries.length === 0) return;
+        // Empty-view guard: only Escape and view-switching are valid.
+        if (studyLibrarySortedView.length === 0) {
+            if (key === 'ArrowLeft' || key === 'ArrowRight') {
+                // Allow user to escape an empty Favorites view.
+                const dir = key === 'ArrowRight' ? 1 : -1;
+                const cur = STUDY_SORT_MODES.indexOf(currentSortMode);
+                const next = STUDY_SORT_MODES[(cur + dir + STUDY_SORT_MODES.length) % STUDY_SORT_MODES.length];
+                currentSortMode = next;
+                persistSortMode(next);
+                studyLibrarySortedView = deriveStudyLibraryView(studyLibraryEntries, currentSortMode);
+                currentMenuIndex = 0;
+                renderStudyLibrary();
+                const viewLine = describeSortMode(currentSortMode, studyLibrarySortedView.length, studyLibraryEntries.length);
+                if (studyLibrarySortedView.length === 0) {
+                    speak(`${viewLine} No plans match. Left or right to switch view.`);
+                } else {
+                    speak(`${viewLine} 1 of ${studyLibrarySortedView.length}: ${formatLibraryEntry(studyLibrarySortedView[0])}.`);
+                }
+            } else {
+                speak("No plans in this view. Left or right to switch view, Escape to close.");
+            }
+            return;
+        }
 
         if (key === 'ArrowDown' || key === 'ArrowUp') {
-            const len = studyLibraryEntries.length;
+            const len = studyLibrarySortedView.length;
             currentMenuIndex = key === 'ArrowDown'
                 ? (currentMenuIndex + 1) % len
                 : (currentMenuIndex - 1 + len) % len;
-            const entry = studyLibraryEntries[currentMenuIndex];
-            const labels = studyLibraryEntries.map(e => formatLibraryEntry(e));
-            renderMenuVisuals(currentMenuTitle, labels, currentMenuIndex);
+            const entry = studyLibrarySortedView[currentMenuIndex];
+            renderStudyLibrary();
             speak(`${currentMenuIndex + 1} of ${len}: ${formatLibraryEntry(entry)}`);
             return;
         }
 
+        if (key === 'ArrowLeft' || key === 'ArrowRight') {
+            const dir = key === 'ArrowRight' ? 1 : -1;
+            const cur = STUDY_SORT_MODES.indexOf(currentSortMode);
+            const next = STUDY_SORT_MODES[(cur + dir + STUDY_SORT_MODES.length) % STUDY_SORT_MODES.length];
+            currentSortMode = next;
+            persistSortMode(next);
+            studyLibrarySortedView = deriveStudyLibraryView(studyLibraryEntries, currentSortMode);
+            currentMenuIndex = 0;
+            renderStudyLibrary();
+            const viewLine = describeSortMode(currentSortMode, studyLibrarySortedView.length, studyLibraryEntries.length);
+            if (studyLibrarySortedView.length === 0) {
+                speak(`${viewLine} No plans match.`);
+            } else {
+                speak(`${viewLine} 1 of ${studyLibrarySortedView.length}: ${formatLibraryEntry(studyLibrarySortedView[0])}.`);
+            }
+            return;
+        }
+
+        if (key === 'k' || key === 'K') {
+            const target = studyLibrarySortedView[currentMenuIndex];
+            if (!target || !target.cacheKey) {
+                speak("Cannot pin this entry.");
+                return;
+            }
+            const willPin = target.isFavorite !== true;
+
+            if (willPin) {
+                // Enforce hard cap from the local view (avoid extra DB roundtrip).
+                const currentPinned = studyLibraryEntries.filter(e => e.isFavorite === true).length;
+                if (currentPinned >= FAVORITE_HARD_CAP) {
+                    speak(`Favorite limit reached. ${FAVORITE_HARD_CAP} plans pinned. Unpin one to continue.`);
+                    return;
+                }
+            }
+
+            // Optimistic mutation on the master list. The view shares
+            // object identity with the master so this is reflected
+            // automatically — except in Favorites view, where unpinning
+            // must remove the entry from the visible list.
+            target.isFavorite = willPin;
+            setCachedFavorite(target.cacheKey, willPin).catch(err => {
+                console.warn('[StudyLibrary] setFavorite failed:', err?.message || err);
+            });
+
+            // Tone first, then word — keep utterance tight.
+            if (willPin) {
+                playTone(880, 'sine', 0.10, 0.20);
+            } else {
+                playTone(440, 'sine', 0.10, 0.20);
+            }
+
+            if (currentSortMode === 'favorites' && !willPin) {
+                // Re-derive: the entry just left the visible set.
+                studyLibrarySortedView = deriveStudyLibraryView(studyLibraryEntries, 'favorites');
+                if (studyLibrarySortedView.length === 0) {
+                    renderStudyLibrary();
+                    speak("Unpinned. Favorites view is now empty.");
+                    return;
+                }
+                if (currentMenuIndex >= studyLibrarySortedView.length) {
+                    currentMenuIndex = studyLibrarySortedView.length - 1;
+                }
+                renderStudyLibrary();
+                const next = studyLibrarySortedView[currentMenuIndex];
+                speak(`Unpinned. ${currentMenuIndex + 1} of ${studyLibrarySortedView.length}: ${formatLibraryEntry(next)}.`);
+                return;
+            }
+
+            renderStudyLibrary();
+            speak(willPin ? "Pinned." : "Unpinned.");
+            return;
+        }
+
         if (key === 'Delete') {
-            const victim = studyLibraryEntries[currentMenuIndex];
+            const victim = studyLibrarySortedView[currentMenuIndex];
             if (!victim || !victim.cacheKey) {
                 speak("Cannot delete this entry.");
                 return;
             }
             const victimLabel = formatLibraryEntry(victim);
             // Optimistic UI: drop locally, then fire-and-forget the DB delete.
-            studyLibraryEntries.splice(currentMenuIndex, 1);
+            const masterIdx = studyLibraryEntries.indexOf(victim);
+            if (masterIdx !== -1) studyLibraryEntries.splice(masterIdx, 1);
+            studyLibrarySortedView.splice(currentMenuIndex, 1);
             removeCachedPlan(victim.cacheKey).catch(err => {
                 console.warn('[StudyLibrary] delete failed:', err?.message || err);
             });
 
-            if (studyLibraryEntries.length === 0) {
-                speak(`${victimLabel} deleted. Study library is now empty.`);
-                clearAllModes();
+            if (studyLibrarySortedView.length === 0) {
+                speak(`${victimLabel} deleted. ${currentSortMode === 'favorites' ? 'Favorites view' : 'Study library'} is now empty.`);
+                if (studyLibraryEntries.length === 0) {
+                    clearAllModes();
+                    return;
+                }
+                renderStudyLibrary();
                 return;
             }
 
-            // Clamp index to new bounds.
-            if (currentMenuIndex >= studyLibraryEntries.length) {
-                currentMenuIndex = studyLibraryEntries.length - 1;
+            if (currentMenuIndex >= studyLibrarySortedView.length) {
+                currentMenuIndex = studyLibrarySortedView.length - 1;
             }
-            const labels = studyLibraryEntries.map(e => formatLibraryEntry(e));
-            renderMenuVisuals(currentMenuTitle, labels, currentMenuIndex);
-            const next = studyLibraryEntries[currentMenuIndex];
-            speak(`Plan deleted. ${currentMenuIndex + 1} of ${studyLibraryEntries.length}: ${formatLibraryEntry(next)}`);
+            renderStudyLibrary();
+            const next = studyLibrarySortedView[currentMenuIndex];
+            speak(`Plan deleted. ${currentMenuIndex + 1} of ${studyLibrarySortedView.length}: ${formatLibraryEntry(next)}`);
+            return;
+        }
+
+        // First-letter navigation — Alphabetical view only.
+        if (currentSortMode === 'alpha' && key.length === 1 && /^[a-z]$/i.test(key)) {
+            const target = key.toLowerCase();
+            const len = studyLibrarySortedView.length;
+            // Search forward from currentMenuIndex+1, wrapping.
+            let foundIdx = -1;
+            for (let step = 1; step <= len; step++) {
+                const probe = (currentMenuIndex + step) % len;
+                const topic = studyLibrarySortedView[probe].plan?.topic || '';
+                if (topic.charAt(0).toLowerCase() === target) {
+                    foundIdx = probe;
+                    break;
+                }
+            }
+            if (foundIdx === -1) {
+                speak(`No plans starting with ${target.toUpperCase()}.`);
+                return;
+            }
+            currentMenuIndex = foundIdx;
+            renderStudyLibrary();
+            const entry = studyLibrarySortedView[currentMenuIndex];
+            speak(`${currentMenuIndex + 1} of ${len}: ${formatLibraryEntry(entry)}`);
             return;
         }
 
         if (key === 'Enter') {
-            const entry = studyLibraryEntries[currentMenuIndex];
+            const entry = studyLibrarySortedView[currentMenuIndex];
             if (!entry || !entry.plan || !Array.isArray(entry.plan.verses) || entry.plan.verses.length === 0) {
                 speak("This plan is empty or invalid.");
                 return;
@@ -1265,6 +1446,7 @@ export function handleInput(event) {
             // readCurrentVerse triggered by jumpTo() sees a clean state.
             isStudyLibraryMode = false;
             studyLibraryEntries = [];
+            studyLibrarySortedView = [];
             currentMenuIndex = 0;
             currentMenuTitle = "";
             clearVisualBuffer();
@@ -1791,14 +1973,23 @@ export function handleInput(event) {
                         return;
                     }
                     studyLibraryEntries = entries;
+                    currentSortMode = loadPersistedSortMode();
+                    studyLibrarySortedView = deriveStudyLibraryView(studyLibraryEntries, currentSortMode);
+                    if (currentSortMode === 'favorites' && studyLibrarySortedView.length === 0) {
+                        // Don't strand the user in an empty Favorites view.
+                        currentSortMode = 'recent';
+                        studyLibrarySortedView = deriveStudyLibraryView(studyLibraryEntries, 'recent');
+                        persistSortMode('recent');
+                    }
                     isStudyLibraryMode = true;
                     currentMenuIndex = 0;
                     currentMenuTitle = "STUDY LIBRARY";
-                    const labels = studyLibraryEntries.map(e => formatLibraryEntry(e));
-                    renderMenuVisuals(currentMenuTitle, labels, currentMenuIndex);
-                    speak(`Study Library. ${entries.length} cached plan${entries.length === 1 ? '' : 's'}, sorted newest first. ` +
-                          `1 of ${entries.length}: ${formatLibraryEntry(entries[0])}. ` +
-                          `Up and down arrows to navigate. Enter to load. Escape to close.`);
+                    renderStudyLibrary();
+                    const viewLine = describeSortMode(currentSortMode, studyLibrarySortedView.length, studyLibraryEntries.length);
+                    const first = studyLibrarySortedView[0];
+                    speak(`Study Library. ${viewLine} ` +
+                          `1 of ${studyLibrarySortedView.length}: ${formatLibraryEntry(first)}. ` +
+                          `Up and down to navigate. Left and right to switch view. K to pin. Delete to remove. Enter to load. Escape to close.`);
                 })();
                 break;
             }

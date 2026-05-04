@@ -141,6 +141,10 @@ export async function put(cacheKey, plan, meta = {}) {
  * Lazy LRU sweep. Walks the lastAccessed index in ascending order and
  * deletes the oldest records until count <= PLAN_CACHE_SOFT_CAP.
  * Resolves with the number of records evicted.
+ *
+ * v69.2: Favorited records (isFavorite === true) are immune. The cursor
+ * skips them. A defensive scan-cap prevents pathological infinite-skip
+ * if every remaining record is pinned.
  */
 export async function evictIfOverCap() {
     await whenDbReady();
@@ -152,9 +156,16 @@ export async function evictIfOverCap() {
         const idx = tx.objectStore(STUDYPLANS_STORE).index('lastAccessed');
         const cursorReq = idx.openCursor();
         let evicted = 0;
+        let scanned = 0;
         cursorReq.onsuccess = (event) => {
             const cursor = event.target.result;
-            if (!cursor || evicted >= targetEvict) return;
+            if (!cursor || evicted >= targetEvict || scanned >= total) return;
+            scanned += 1;
+            // v69.2: skip pinned records. They are immune to LRU eviction.
+            if (cursor.value && cursor.value.isFavorite === true) {
+                cursor.continue();
+                return;
+            }
             cursor.delete();
             evicted += 1;
             cursor.continue();
@@ -183,7 +194,13 @@ export async function getAllSorted() {
         cursorReq.onsuccess = (event) => {
             const cursor = event.target.result;
             if (!cursor) return;
-            if (cursor.value && cursor.value.plan) out.push(cursor.value);
+            if (cursor.value && cursor.value.plan) {
+                // v69.2: Coerce missing isFavorite to false. Old v3
+                // records predate the field; do not bump SCHEMA_VERSION.
+                const rec = cursor.value;
+                if (rec.isFavorite !== true) rec.isFavorite = false;
+                out.push(rec);
+            }
             cursor.continue();
         };
         tx.oncomplete = () => resolve(out);
@@ -208,5 +225,75 @@ export async function remove(cacheKey) {
         store.delete(cacheKey);
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(new Error('planCache delete failed.'));
+    });
+}
+
+// --- v69.2: Favorites / Pinning --------------------------------------------
+
+/**
+ * Hard cap on simultaneous favorites. Must be strictly less than
+ * PLAN_CACHE_SOFT_CAP, otherwise evictIfOverCap could be starved by
+ * pinned records and the cache would grow unbounded.
+ */
+export const FAVORITE_HARD_CAP = 20;
+
+/**
+ * Toggle the isFavorite flag on a single record. Read-modify-write in
+ * a single readwrite tx for atomicity.
+ *
+ * Note: We deliberately do NOT bump lastAccessed. Pinning a plan should
+ * not make it look "recent" — that would corrupt the Recent view's
+ * ordering and confuse the LRU heuristic.
+ *
+ * Caller is responsible for enforcing FAVORITE_HARD_CAP via
+ * getFavoriteCount() before calling this with isFavorite=true.
+ */
+export async function setFavorite(cacheKey, isFavorite) {
+    if (!cacheKey || typeof cacheKey !== 'string') {
+        throw new Error('planCache.setFavorite: cacheKey required.');
+    }
+    const flag = isFavorite === true;
+    await whenDbReady();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction([STUDYPLANS_STORE], 'readwrite');
+        const store = tx.objectStore(STUDYPLANS_STORE);
+        const getReq = store.get(cacheKey);
+        getReq.onsuccess = () => {
+            const record = getReq.result;
+            if (!record) {
+                // Idempotent on missing key — match remove()'s contract.
+                resolve(false);
+                return;
+            }
+            record.isFavorite = flag;
+            store.put(record);
+        };
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(new Error('planCache setFavorite failed.'));
+    });
+}
+
+/**
+ * Counts records with isFavorite === true. Used to enforce the hard
+ * cap before the user is allowed to pin another plan.
+ *
+ * Implementation note: no isFavorite index exists, so we full-scan.
+ * Bounded by PLAN_CACHE_SOFT_CAP, this is trivial.
+ */
+export async function getFavoriteCount() {
+    await whenDbReady();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction([STUDYPLANS_STORE], 'readonly');
+        const store = tx.objectStore(STUDYPLANS_STORE);
+        const cursorReq = store.openCursor();
+        let n = 0;
+        cursorReq.onsuccess = (event) => {
+            const cursor = event.target.result;
+            if (!cursor) return;
+            if (cursor.value && cursor.value.isFavorite === true) n += 1;
+            cursor.continue();
+        };
+        tx.oncomplete = () => resolve(n);
+        tx.onerror = () => reject(new Error('planCache getFavoriteCount failed.'));
     });
 }
