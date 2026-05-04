@@ -34,6 +34,54 @@ export function playTone(freq, type, dur, vol) {
     osc.stop(audioCtx.currentTime + dur);
 }
 
+/**
+ * Tone with a single delayed echo tail. Used by the JIT heartbeat
+ * "Lifeboat" pulse — distinct from a plain playTone so it cuts through
+ * screen-reader output without being mistaken for navigation feedback.
+ *
+ * Signature kept positional for compatibility with the call site:
+ *   playEcho(type, freq, _unused, dur, vol, echoDelay)
+ *
+ * @param {OscillatorType} type
+ * @param {number} freq         Oscillator frequency in Hz
+ * @param {*}      _unused      Reserved (was a second freq); kept for API stability
+ * @param {number} dur          Tone duration in seconds
+ * @param {number} vol          Base volume 0..1 (boosted internally)
+ * @param {number} echoDelay    Seconds before the echo strikes (0.3 typical)
+ */
+export function playEcho(type, freq, _unused, dur, vol, echoDelay) {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const boostedVol = Math.min(1, vol * AUDIO_GAIN_BOOST);
+    const safeDur = Math.max(0.02, dur);
+    const safeDelay = Math.max(0, echoDelay || 0);
+
+    // Primary strike.
+    const osc1 = audioCtx.createOscillator();
+    const gain1 = audioCtx.createGain();
+    osc1.type = type;
+    osc1.frequency.value = freq;
+    gain1.gain.setValueAtTime(boostedVol, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + safeDur);
+    osc1.connect(gain1);
+    gain1.connect(audioCtx.destination);
+    osc1.start(now);
+    osc1.stop(now + safeDur);
+
+    // Echo strike — quieter, same envelope shape, offset by echoDelay.
+    const osc2 = audioCtx.createOscillator();
+    const gain2 = audioCtx.createGain();
+    const echoVol = Math.min(1, boostedVol * 0.5);
+    osc2.type = type;
+    osc2.frequency.value = freq;
+    gain2.gain.setValueAtTime(echoVol, now + safeDelay);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + safeDelay + safeDur);
+    osc2.connect(gain2);
+    gain2.connect(audioCtx.destination);
+    osc2.start(now + safeDelay);
+    osc2.stop(now + safeDelay + safeDur);
+}
+
 export function playSequence(types, freqs, dur, vol) {
     if (!Array.isArray(freqs) || freqs.length === 0) return;
     for (let i = 0; i < freqs.length; i++) {
