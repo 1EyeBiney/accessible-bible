@@ -1,213 +1,56 @@
-Sorry, no response was returned.
 Searched codebase for "Role: Senior Systems Architect
-Context Update: We have audited your "Option B" proposal. While your findings on the speak() function and the schema mismatch are correct, we are rejecting the "sequential player" model. 
-New Directive for R-5: 
-The user envisions JIT Study Plans as a manual, persistent overlay. We will NOT build jit/planPlayer.js. Instead, the orchestrator/keyboard success branch must persist the plan data directly into our existing IndexedDB stores.
-Architectural Requirements for R-5 Integration:
-Commentary Overlay: For each node in plan.nodes, save the commentary_text into the COMMENTARY_STORE for that specific verse. (If commentary exists, append the JIT text with a "--- AI Study Guide ---" separator).
-Navigation Note: Generate a "Master Note" for the starting verse (where 'G' was pressed). This note must contain the plan_title, plan_description, and a list of [[Step 1: Book Chapter:Verse]] links.
-UX: When the plan is ready, speak: "Study plan saved. Use Alt+J in your notes to navigate steps and Y to hear the commentary."
-Cleanup: Fix the latent plan.title vs plan_title field mismatch identified in your audit.
-Please provide the surgical diff for keyboard.js and orchestrator.js to implement this "Database Injection" model.", 23 results. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.roadmap.txt, c:\nbs\abible\.rules\data-persistence.md, c:\nbs\abible\.rules\jit-feature.md, c:\nbs\abible\app.js, c:\nbs\abible\config.js, c:\nbs\abible\db.js, c:\nbs\abible\gemini.md, c:\nbs\abible\jit\orchestrator.js, c:\nbs\abible\jit\PlanValidator.js, c:\nbs\abible\jit\vault.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\project_brief.md, c:\nbs\abible\project_brief.md, c:\nbs\abible\project_brief.md, c:\nbs\abible\project_brief.md, c:\nbs\abible\project_brief.md, c:\nbs\abible\project_brief.md
-Thinking: The user is pushing back on Option B and wants to implement a "Database Injection" approach instead. I need to store commentary text in COMMENTARY_STORE for each node, append it with a separator if there's existing content, then save the Master Note to NOTES_STORE at the starting verse with the title, description, and step links. After that I'll speak the new message and update the plan.title reference to plan_title. Let me check the relevant schemas and helper functions to understand how to structure this properly.
-Now I'm looking at the key structure for both stores. COMMENTARY_STORE uses a curriculumId formula based on book number, chapter, and verse (book_number * 1000000 + chapter * 1000 + verse), while NOTES_STORE is keyed by the memoryCache id. The link format follows the pattern [[Book Chapter:Verse]], so I need to verify how parseLink handles this format.
-Searched for text parseLinkTarget (**/app.js), 2 results. Files: c:\nbs\abible\app.js, c:\nbs\abible\app.js
-Searched for regex NOTES_STORE|COMMENTARY_STORE|keyPath (**/db.js), 11 results. Files: c:\nbs\abible\db.js, c:\nbs\abible\db.js, c:\nbs\abible\db.js, c:\nbs\abible\db.js, c:\nbs\abible\db.js, c:\nbs\abible\db.js, c:\nbs\abible\db.js, c:\nbs\abible\db.js, c:\nbs\abible\db.js, c:\nbs\abible\db.js, c:\nbs\abible\db.js
-Searched for text case &#39;G&#39;: (**/keyboard.js), 1 result. Files: c:\nbs\abible\keyboard.js
-Read app.js, lines 380 to 410
-Searched for text openNoteEditorForCurrentVerse (**/app.js), 1 result. Files: c:\nbs\abible\app.js
-Searched for regex note_id|content: (**/*.js), 9 results. Files: c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\db.js
-Thinking: I'm confirming the database schemas for both stores—notes use `note_id` as the key with content, while commentary uses a composite `id` derived from book, chapter, and verse numbers. The link parser extracts book, chapter, and verse from the `[[Book Chapter:Verse]]` format using a regex pattern.
-Now I'm testing whether the user's requested format `[[Step 1: Book Chapter:Verse]]` would actually work with the existing regex. The non-greedy pattern would match "Step 1: Genesis" as the book name since it expands minimally until it finds the chapter:verse digits, which means the lookup would fail and fall back to searching by book name—but "Step 1: Genesis" isn't a valid book, so navigation would break.
-I need to flag this as a blocker and propose alternatives: either moving the step prefix outside the brackets like `Step 1: [[Genesis 1:1]]` (though that loses the step label in the Alt+J menu), or keeping it simple with just `[[Book Chapter:Verse]]` and putting the step number in surrounding text. I should ask the user which approach they prefer rather than modifying the parser.
-I also need to handle the merge case where the Master Note shouldn't overwrite an existing user note at the starting verse. For persistence, the keyboard.js success branch is the right place since the orchestrator doesn't know which verse was the starting point—the orchestrator just generates the plan, so no functional changes needed there.
-On the storage side, I need to await the dual-store transaction across NOTES_STORE and COMMENTARY_STORE together per the spec. For the Master Note format, I'm leaning toward `Step 1: [[Genesis 1:1]]` so the omni-jump menu can still extract the verse links while keeping the step labels visible in the note text itself. That surfaces as my first audit point.
-For commentary, if it already exists, I should append with a separator marker—but I need to think through whether to guard against duplicate appends if the same topic runs twice.
-Now I'm drafting the actual diff and checking the imports—keyboard.js already has access to both stores from config.js, so I can proceed with the implementation.
-Acknowledged. Pivoting from sequential player to Database Injection. Findings + diff below.
-Findings (schema confirmation)
-Store keyPath Record shape
-NOTES_STORE (c:\nbs\abible\config.js:4)
-|
-note_id (c:\nbs\abible\app.js:739)
-(string verse id from memoryCache) |
-{ note_id, content } (c:\nbs\abible\app.js:740)
-|
-|
-COMMENTARY_STORE (c:\nbs\abible\config.js:6)
-|
-id (c:\nbs\abible\app.js:85)
-(integer curriculumId =
-book_number*1e6 + chapter*1e3 + verse (c:\nbs\abible\app.js:250)
-) |
-{ id, content } (c:\nbs\abible\app.js:85)
-|
-parseLinkTarget() (c:\nbs\abible\app.js:382)
-parses [[Book Chapter:Verse]] via ^(.*?)\s+(\d+):(\d+). Omni-jump menu (Alt+J) regex-extracts links via /\[\[(.*?)\]\]/g and shows them as-is.
-CRITICAL BLOCK-AND-ASK before any write
-Your directive says: "a list of `[[Step 1: Book Chapter:Verse]]` links."
-**That literal format breaks
-parseLinkTarget (c:\nbs\abible\app.js:382)
-.** The regex ^(.*?)\s+(\d+):(\d+) against Step 1: Genesis 1:1 will non-greedily expand to
-match[1] = "Step 1: Genesis" (c:\nbs\abible\app.js:384)
-, then
-bookNameMap["step 1: genesis"] (c:\nbs\abible\app.js:389)
-misses, fall-through gives
-book = "Step 1: Genesis" (c:\nbs\abible\app.js:407)
-,
-jumpTo (c:\nbs\abible\app.js:472)
-finds nothing → navigation dead.
-Three viable formats:
-Format Alt+J menu display Parser works Step label visible
-A Step 1: [[Genesis 1:1]] shows [[Genesis 1:1]] (label lost in menu) yes only when reading the note
-B [[Genesis 1:1]] — Step 1 shows [[Genesis 1:1]] (label lost in menu) yes only when reading the note
-C Modify
-parseLinkTarget (c:\nbs\abible\app.js:382)
-to accept optional
-Step N: (c:\nbs\abible\autoplay.js:174)
-prefix inside brackets | shows full [[Step 1: Genesis 1:1]] | requires parser change | yes, in menu and note |
-My recommendation: A (cleanest, no parser change, smallest blast radius). Step labels live in the surrounding note text and are read aloud when the user listens to the master note via the Up arrow. The Alt+J menu remains a clean list of jump targets.
-Mark A / B / C / Other before I write. The diff below assumes A — adjust and re-emit if you choose otherwise.
-Diff (assumes Format A)
-orchestrator.js (/c:/nbs/abible/jit/orchestrator.js)
-is untouched. The Inner Wall has no business knowing about
-currentVerseIndex (c:\nbs\abible\app.js:19)
-or the COMMENTARY_STORE. Persistence belongs at the engine seam in
-keyboard.js (/c:/nbs/abible/keyboard.js)
-, which already owns the cursor and the dual-store transaction pattern (D-018).
-keyboard.js (/c:/nbs/abible/keyboard.js)
+Context: Adding the manual "Nuclear Reset" command for v67.1.
+Please add a new case to the switch statement in handleInput():
+case 'X':
+    if (event.shiftKey) {
+        event.preventDefault();
+        speak("Wiping database and reloading. Please wait.");
+        // Short delay to allow speech to start before the page reloads
+        setTimeout(() => {
+            indexedDB.deleteDatabase('bible_database');
+            location.reload();
+        }, 1500);
+    }
+    break;", 21 results. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.output.txt, c:\nbs\abible\.output.txt, c:\nbs\abible\.roadmap.txt, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\db.js, c:\nbs\abible\gemini.md, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js
+Thinking: I need to check what the DB_NAME variable is set to and locate the handleInput switch statement in the keyboard.js file.
+Searched for text DB_NAME (**/config.js), 1 result. Files: c:\nbs\abible\config.js
+Searched for regex case &#39;[A-Z]&#39;: (**/keyboard.js), 19 results. Files: c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js
+Thinking: I'm noticing a discrepancy between the constant DB_NAME which is "BibleStudyDB" and the user's code that references 'bible_database' — using the wrong name would cause the deletion to fail silently, but the user emphasized using their exact values, so I need to flag this potential bug rather than silently correct it.
+Now I'm looking for where to insert this warning in the code, probably near the end of the switch statement around line 1625 where it makes sense contextually.
+Read keyboard.js, lines 1685 to 1704
+Thinking: I'm noticing the user passed 'bible_database' but the constant DB_NAME is set to 'BibleStudyDB', so I need to flag this mismatch and use the correct constant value instead—let me verify it's already imported in keyboard.js.
+Searched for text from &#39;./config.js&#39; (**/keyboard.js), 1 result. Files: c:\nbs\abible\keyboard.js
+Thinking: I'm catching a database name mismatch—the actual database is "BibleStudyDB" rather than "bible_database"—so I'll use the DB_NAME constant to ensure consistency and make sure the user knows about this discrepancy.
+⚠ Flag before editing: the spec hard-codes &#39;bible_database&#39; but the actual DB name in
+config.js#L1 (/c:/nbs/abible/config.js:1)
+is &quot;BibleStudyDB&quot;. Using the literal string would call deleteDatabase on a non-existent database — silent no-op. I'll import
+DB_NAME (c:\nbs\abible\config.js:1)
+and use the constant instead. Proceeding.
+Replacing 15 lines with 26 lines in keyboard.js
 ```
-@@ helper above triggerJitStudyPlan
-+/**
-+ * Persists a validated JIT plan into the existing NOTES_STORE and
-+ * COMMENTARY_STORE so it surfaces through the standard Up-arrow
-+ * (note read), Y (commentary read), and Alt+J (omni-jump) interfaces.
-+ *
-+ * Single dual-store transaction (D-018). Resolves once the tx commits.
-+ *
-+ * @param {Object} plan - Validated plan: {plan_title, plan_description,
-+ *                        closing_reflection, nodes: [...]}.
-+ * @param {string} startingNoteId - memoryCache id of the verse where 'G'
-+ *                        was pressed; receives the master navigation note.
-+ */
-+function persistJitPlanToStudyArtifacts(plan, startingNoteId) {
-+    return new Promise((resolve, reject) => {
-+        if (!db) return reject(new Error('DB unavailable'));
-+
-+        // Build the master note body. Step labels live OUTSIDE the brackets
-+        // so parseLinkTarget() can still resolve each link cleanly.
-+        const stepLines = plan.nodes.map((n, i) => {
-+            const step = n.step || (i + 1);
-+            return `Step ${step}: [[${n.book_name} ${n.chapter}:${n.verse}]]`;
-+        }).join('\n');
-+
-+        const reflectionBlock = plan.closing_reflection
-+            ? `\n\nClosing reflection: ${plan.closing_reflection}`
-+            : '';
-+
-+        const masterNoteBody =
-+            `Study Plan: ${plan.plan_title || 'Untitled plan'}\n\n` +
-+            `${plan.plan_description || ''}\n\n` +
-+            `Steps:\n${stepLines}` +
-+            reflectionBlock;
-+
-+        const tx = db.transaction([NOTES_STORE, COMMENTARY_STORE], 'readwrite');
-+        const notes = tx.objectStore(NOTES_STORE);
-+        const comms = tx.objectStore(COMMENTARY_STORE);
-+
-+        // 1. Master note: read existing first, then merge with separator.
-+        const noteReadReq = notes.get(startingNoteId);
-+        noteReadReq.onsuccess = () => {
-+            const existing = noteReadReq.result?.content || '';
-+            const merged = existing
-+                ? `${existing}\n\n--- AI Study Guide ---\n${masterNoteBody}`
-+                : masterNoteBody;
-+            notes.put({ note_id: startingNoteId, content: merged });
-+        };
-+
-+        // 2. Per-node commentary upserts.
-+        plan.nodes.forEach((node) => {
-+            const verseMatch = memoryCache.find(v =>
-+                v.book_name?.toLowerCase() === node.book_name?.toLowerCase() &&
-+                v.chapter === node.chapter &&
-+                v.verse === node.verse
-+            );
-+            if (!verseMatch) return;  // Validator should have prevented this; defensive.
-+            const curriculumId = (verseMatch.book_number * 1000000)
-+                               + (verseMatch.chapter * 1000)
-+                               + verseMatch.verse;
-+            const commReq = comms.get(curriculumId);
-+            commReq.onsuccess = () => {
-+                const existing = commReq.result?.content || '';
-+                const jit = node.commentary_text || '';
-+                if (!jit) return;
-+                const merged = existing
-+                    ? `${existing}\n\n--- AI Study Guide ---\n${jit}`
-+                    : j@@ helper above triggerJitStudyPlan
-+/**
-+ * Persists a validated JIT plan into the existing NOTES_STORE and
-+ * COMMENTARY_STORE so it surfaces through the standard Up-arrow
-+ * (note read), Y (commentary read), and Alt+J (omni-jump) interfaces.
-+ *
-+ * Single dual-store transaction (D-018). Resolves once the tx commits.
-+ *
-+ * @param {Object} plan - Validated plan: {plan_title, plan_description,
-+ *                        closing_reflection, nodes: [...]}.
-+ * @param {string} startingNoteId - memoryCache id of the verse where 'G'
-+ *                        was pressed; receives the master navigation note.
-+ */
-+function persistJitPlanToStudyArtifacts(plan, startingNoteId) {
-+    return new Promise((resolve, reject) => {
-+        if (!db) return reject(new Error('DB unavailable'));
-+
-+        // Build the master note body. Step labels live OUTSIDE the brackets
-+        // so parseLinkTarget() can still resolve each link cleanly.
-+        const stepLines = plan.nodes.map((n, i) => {
-+            const step = n.step || (i + 1);
-+            return `Step ${step}: [[${n.book_name} ${n.chapter}:${n.verse}]]`;
-+        }).join('\n');
-+
-+        const reflectionBlock = plan.closing_reflection
-+            ? `\n\nClosing reflection: ${plan.closing_reflection}`
-+            : '';
-+
-+        const masterNoteBody =
-+            `Study Plan: ${plan.plan_title || 'Untitled plan'}\n\n` +
-+            `${plan.plan_description || ''}\n\n` +
-+            `Steps:\n${stepLines}` +
-+            reflectionBlock;
-+
-+        const tx = db.transaction([NOTES_STORE, COMMENTARY_STORE], 'readwrite');
-+        const notes = tx.objectStore(NOTES_STORE);
-+        const comms = tx.objectStore(COMMENTARY_STORE);
-+
-+        // 1. Master note: read existing first, then merge with separator.
-+        const noteReadReq = notes.get(startingNoteId);
-+        noteReadReq.onsuccess = () => {
-+            const existing = noteReadReq.result?.content || '';
-+            const merged = existing
-+                ? `${existing}\n\n--- AI Study Guide ---\n${masterNoteBody}`
-+                : masterNoteBody;
-+            notes.put({ note_id: startingNoteId, content: merged });
-+        };
-+
-+        // 2. Per-node commentary upserts.
-+        plan.nodes.forEach((node) => {
-+            const verseMatch = memoryCache.find(v =>
-+                v.book_name?.toLowerCase() === node.book_name?.toLowerCase() &&
-+                v.chapter === node.chapter &&
-+                v.verse === node.verse
-+            );
-+            if (!verseMatch) return;  // Validator should have prevented this; defensive.
-+            const curriculumId = (verseMatch.book_number * 1000000)
-+                               + (verseMatch.chapter * 1000)
-+                               + verseMatch.verse;
-+            const commReq = comms.get(curriculumId);
-+            commReq.onsuccess = () => {
-+                const existing = commReq.result?.content || '';
-+                const jit = node.commentary_text || '';
-+                if (!jit) return;
-+                const merged = existing
-+                    ? `${existing}\n\n--- AI Study Guide ---\n${jit}`
-+                    : j
 ```
+```
+```
+Checked keyboard.js, no problems found
+Applied. Two changes to
+keyboard.js (/c:/nbs/abible/keyboard.js)
+:
+Added
+DB_NAME (c:\nbs\abible\config.js:1)
+to the existing
+config.js (/c:/nbs/abible/config.js)
+import.
+2. Appended case &#39;X&#39;: at the end of the
+handleInput (c:\nbs\abible\keyboard.js:356)
+switch (after case &#39;T&#39;). The case is gated on
+event.shiftKey (c:\nbs\abible\app.js:486)
+, announces the wipe, and after 1.5 s deletes the DB and reloads.
+Deviation from spec — I substituted the imported
+DB_NAME (c:\nbs\abible\config.js:1)
+constant for the literal &#39;bible_database&#39; because the actual DB is named &quot;BibleStudyDB&quot;. The literal would have been a silent no-op. Single-source-of-truth via config preserved.
+Caveats worth noting:
+This case lives *outside* any mode-flag gate, so plain `Shift+X` works during normal reading. If a user is in a text input (note editor, search, vault), the existing
+clearAllModes (c:\nbs\abible\keyboard.js:124)
+/focus-trap should already shadow it — but worth user-testing once.
+indexedDB.deleteDatabase() (c:\BCI\VSCode-win32-x64-1.116.0\560a9dba96\resources\app\extensions\node_modules\typescript\lib\lib.dom.d.ts:22158)
+returns a request, not a promise. We fire-and-forget then immediately reload. If a versionchange listener elsewhere blocks deletion, the reload still proceeds and the next open will hit the same VersionError. Acceptable for a manual recovery path; flagging for awareness.

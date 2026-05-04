@@ -17,8 +17,13 @@ export function initDatabase(callback) {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onerror = (event) => {
-        console.error("IndexedDB error:", event.target.errorCode);
-        speak("Database error.");
+        const err = event.target.error;
+        console.error("IndexedDB open failed:", err?.name, err?.message);
+        if (err?.name === 'VersionError') {
+            speak("Database version mismatch. Reset required. Press Shift plus X to wipe the database.");
+        } else {
+            speak(`Database error: ${err?.name || 'unknown'}.`);
+        }
     };
 
     request.onsuccess = (event) => {
@@ -134,15 +139,21 @@ export function loadBookmarks(callback) {
 // are hydrated. Used by jit/* leaf modules that may import before
 // initDatabase() completes its async chain.
 export function whenDbReady() {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         if (db && isReady) {
             resolve();
             return;
         }
+        const start = Date.now();
         const interval = setInterval(() => {
             if (db && isReady) {
                 clearInterval(interval);
                 resolve();
+                return;
+            }
+            if (Date.now() - start > 5000) {
+                clearInterval(interval);
+                reject(new Error('Database not ready within 5 seconds.'));
             }
         }, 25);
     });

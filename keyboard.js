@@ -21,7 +21,7 @@ import {
     playNextTrack, cycleVolume, playTone, silenceBootAudio 
 } from './audio.js';
 import { startAutoPlay, pauseAutoPlay, stopAutoPlay, isAutoPlaying, autoPlaySettings, curatedVoices, playAutoPlayUI, saveAutoPlaySettings } from './autoplay.js';
-import { helpMenuData, NOTES_STORE, COMMENTARY_STORE, THEMES, muteTutorialPrompt, setMuteTutorialPrompt } from './config.js';
+import { helpMenuData, NOTES_STORE, COMMENTARY_STORE, THEMES, muteTutorialPrompt, setMuteTutorialPrompt, DB_NAME } from './config.js';
 import { generateStudyPlan } from './jit/orchestrator.js';
 import { getKey, setKey, clearKey, hasKey, redactedDisplay } from './jit/vault.js';
 
@@ -1700,5 +1700,16 @@ export function handleInput(event) {
             speak("Theme: " + newTheme);
             break;
         }
+        case 'X':
+            if (event.shiftKey) {
+                event.preventDefault();
+                speak("Wiping database and reloading. Please wait.");
+                // Short delay to allow speech to start before the page reloads
+                setTimeout(() => {
+                    indexedDB.deleteDatabase(DB_NAME);
+                    location.reload();
+                }, 1500);
+            }
+            break;
     }
 }
