@@ -11,7 +11,9 @@ import {
     audioCtx, audioA, audioB, activeAudio, currentVolumeIndex, crossfadeTimer
 } from './audio.js';
 import { db, memoryCache, bookmarksCache, initDatabase, loadBookmarks, loadToMemory, setMemoryCache } from './db.js';
-import { handleInput, clearAllModes, setSearchMode, setNoteMode, getSearchMode, getNoteMode, setSearchResults, setCurrentSearchResultIndex, updateSearchVisualBuffer, clearVisualBuffer, updateVisualBuffer, isJitInputMode, isJitLoading, isVaultInputMode } from './keyboard.js';
+import { handleInput, clearAllModes, setSearchMode, setNoteMode, getSearchMode, getNoteMode, setSearchResults, setCurrentSearchResultIndex, updateSearchVisualBuffer, clearVisualBuffer, updateVisualBuffer, isJitInputMode, isJitLoading, isVaultInputMode, abortActiveJit } from './keyboard.js';
+import { getResumeHint, setActivePlan, clearActivePlan } from './jit/activePlan.js';
+import { loadPlanFromCache } from './jit/orchestrator.js';
 
 export { memoryCache };
 
@@ -86,6 +88,22 @@ export function executeBootJump() {
         if (foundIdx !== -1) updateVerseIndex(foundIdx);
     }
     readCurrentVerse(true);
+
+    // Third Track resume: if a prior session left a plan in the cache,
+    // restore it as the active overlay and announce a brief hint. The
+    // user did not jump into the plan; they merely have the option to.
+    const hint = getResumeHint();
+    if (hint) {
+        const currentManifest = localStorage.getItem('currentBibleFile') || 'default';
+        loadPlanFromCache(hint).then((plan) => {
+            if (!plan) {
+                clearActivePlan('cache-miss');
+                return;
+            }
+            setActivePlan(plan, { cacheKey: hint, manifestId: currentManifest });
+            speak(`A study plan is paused: ${plan.topic || 'untitled'}. Press Alt plus J to advance, I for insight, or Escape to dismiss.`);
+        }).catch(() => clearActivePlan('cache-error'));
+    }
 }
 
 export function updateVerseIndex(val) { currentVerseIndex = val; }
@@ -849,6 +867,12 @@ export function fetchAndLoadBible(filename, mode = 'bible') {
     speak("Downloading translation...");
     activeReadMode = mode;
     localStorage.setItem('activeReadMode', mode);
+
+    // Third Track lifecycle: a translation switch invalidates any active
+    // study plan (verse IDs and snippets are translation-bound) and any
+    // in-flight generation against the prior translation.
+    abortActiveJit('translation-change');
+
     // 1. Fetch the data FIRST, before opening any IndexedDB transaction
     fetch(`./translations/${filename}`)
         .then(response => {

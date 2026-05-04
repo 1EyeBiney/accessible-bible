@@ -1,56 +1,155 @@
 Searched codebase for "Role: Senior Systems Architect
-Context: Adding the manual "Nuclear Reset" command for v67.1.
-Please add a new case to the switch statement in handleInput():
-case 'X':
-    if (event.shiftKey) {
-        event.preventDefault();
-        speak("Wiping database and reloading. Please wait.");
-        // Short delay to allow speech to start before the page reloads
-        setTimeout(() => {
-            indexedDB.deleteDatabase('bible_database');
-            location.reload();
-        }, 1500);
-    }
-    break;", 21 results. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.output.txt, c:\nbs\abible\.output.txt, c:\nbs\abible\.roadmap.txt, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\db.js, c:\nbs\abible\gemini.md, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js
-Thinking: I need to check what the DB_NAME variable is set to and locate the handleInput switch statement in the keyboard.js file.
-Searched for text DB_NAME (**/config.js), 1 result. Files: c:\nbs\abible\config.js
-Searched for regex case &#39;[A-Z]&#39;: (**/keyboard.js), 19 results. Files: c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js
-Thinking: I'm noticing a discrepancy between the constant DB_NAME which is "BibleStudyDB" and the user's code that references 'bible_database' — using the wrong name would cause the deletion to fail silently, but the user emphasized using their exact values, so I need to flag this potential bug rather than silently correct it.
-Now I'm looking for where to insert this warning in the code, probably near the end of the switch statement around line 1625 where it makes sense contextually.
-Read keyboard.js, lines 1685 to 1704
-Thinking: I'm noticing the user passed 'bible_database' but the constant DB_NAME is set to 'BibleStudyDB', so I need to flag this mismatch and use the correct constant value instead—let me verify it's already imported in keyboard.js.
-Searched for text from &#39;./config.js&#39; (**/keyboard.js), 1 result. Files: c:\nbs\abible\keyboard.js
-Thinking: I'm catching a database name mismatch—the actual database is "BibleStudyDB" rather than "bible_database"—so I'll use the DB_NAME constant to ensure consistency and make sure the user knows about this discrepancy.
-⚠ Flag before editing: the spec hard-codes &#39;bible_database&#39; but the actual DB name in
-config.js#L1 (/c:/nbs/abible/config.js:1)
-is &quot;BibleStudyDB&quot;. Using the literal string would call deleteDatabase on a non-existent database — silent no-op. I'll import
-DB_NAME (c:\nbs\abible\config.js:1)
-and use the constant instead. Proceeding.
-Replacing 15 lines with 26 lines in keyboard.js
-```
-```
-```
-```
-Checked keyboard.js, no problems found
-Applied. Two changes to
-keyboard.js (/c:/nbs/abible/keyboard.js)
-:
-Added
-DB_NAME (c:\nbs\abible\config.js:1)
-to the existing
-config.js (/c:/nbs/abible/config.js)
-import.
-2. Appended case &#39;X&#39;: at the end of the
-handleInput (c:\nbs\abible\keyboard.js:356)
-switch (after case &#39;T&#39;). The case is gated on
-event.shiftKey (c:\nbs\abible\app.js:486)
-, announces the wipe, and after 1.5 s deletes the DB and reloads.
-Deviation from spec — I substituted the imported
-DB_NAME (c:\nbs\abible\config.js:1)
-constant for the literal &#39;bible_database&#39; because the actual DB is named &quot;BibleStudyDB&quot;. The literal would have been a silent no-op. Single-source-of-truth via config preserved.
-Caveats worth noting:
-This case lives *outside* any mode-flag gate, so plain `Shift+X` works during normal reading. If a user is in a text input (note editor, search, vault), the existing
+Context Update: Thank you for the excellent catch regarding the R-5 contradiction and the 'Y' key overload. After reviewing your risk assessment, we would like your architectural opinion on a new proposal that might resolve these conflicts: The "Third Track" Paradigm.
+Proposed Concept: 
+Instead of overloading 'Y' or polluting the user's database stores, what if we treat the JIT Study Guide as a completely separate, third layer of information?
+Three Pure Layers: 
+- 'M' remains strictly for user Notes (NOTES_STORE).
+- 'Y' remains strictly for Library Commentary (COMMENTARY_STORE).
+- We introduce a new key: 'I' (Insight/Instruction). Pressing 'I' will read the AI's generated contextual commentary for the active verse, ONLY if that verse is part of the `activeStudyPlan`.
+Storage & State: The strict JSON payload (topic, summary, 5 verses) is saved into the `studyPlans` cache (preserving R-5's goal of persistence) but loaded into an `activeStudyPlan` memory state for the session.
+Navigation: 'Alt + J' is dedicated to advancing to the next verse in the `activeStudyPlan` array.
+Lifecycle: The `activeStudyPlan` clears on (a) new plan generation, (b) translation file switch, or (c) an explicit exit command (e.g., Escape).
+Architectural Evaluation Required:
+Please evaluate this "Third Track" concept. 
+Does introducing a dedicated 'I' key effectively resolve the Conflict A ('Y' key overload) and the R-5 persistence dilemma to your satisfaction?
+Are there any new blind spots, state management risks, or UX friction points introduced by adding a third reading layer?
+Please provide your honest diagnostic opinion on this approach before we move to draft the JSON schema and code.", 13 results. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.output.txt, c:\nbs\abible\.output.txt, c:\nbs\abible\.rules\data-persistence.md, c:\nbs\abible\.rules\jit-feature.md, c:\nbs\abible\jit\planCache.js, c:\nbs\abible\jit\vault.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\project_brief.md, c:\nbs\abible\project_brief.md, c:\nbs\abible\project_brief.md, c:\nbs\abible\project_brief.md, c:\nbs\abible\project_brief.md
+Architectural Evaluation — "Third Track" Paradigm
+Pure analysis. No code.
+Verdict: This is the right architecture. Strongly endorse, with five caveats.
+The Third Track resolves both conflicts cleanly and exposes a conceptual model that maps directly to the user's mental model. It is also more honest about what each artifact is: user-authored vs. canonical-curated vs. AI-generated. Mixing those layers — which both R-5 and the Virtual Overlay attempted in different directions — was the underlying error.
+1. Does it resolve Conflict A and the R-5 dilemma?
+Conflict A (`Y` overload): Fully resolved. Y returns to single-purpose: COMMENTARY_STORE readout. The vault confirmation use of Y is in a different mode (
+isVaultInputMode (c:\nbs\abible\keyboard.js:88)
+) so it doesn't compete in normal reading mode. Clean.
+R-5 dilemma: Fully resolved, and more elegantly than R-5 itself.
+The original R-5 conflated two concerns:
+*Persistence of generated content* (so a plan survives reload)
+*Surfacing in user artifact stores* (so plan content appears alongside notes/commentary)
+The Third Track separates these. Persistence stays via the existing studyPlans IDB cache (R-2 infrastructure, already validated). Surfacing happens via the live activeStudyPlan overlay, never polluting NOTES_STORE or COMMENTARY_STORE. The user's hand-written notes and curated commentary remain pristine. This is what R-5 should have been.
+Implication:
+persistJitPlanToStudyArtifacts (c:\nbs\abible\keyboard.js:282)
+(the R-5 dual-store writer) and its "Study plan saved" announcement should be removed in the same commit that introduces the Third Track. Net deletion of code. The R-2 cache already gives us persistence-of-the-generated-artifact; we just need a session-resume path (see caveat 4 below).
+2. New Blind Spots & Risks
+Blind Spot 1 — `I` discoverability.
+I is new. The help menu (H) lists every key binding via
+helpMenuData (c:\nbs\abible\config.js:15)
+(config.js). The new key must be added to
+helpMenuData (c:\nbs\abible\config.js:15)
+in the same commit, with conditional phrasing: "I — Insight. Read AI study commentary if a study plan is active on this verse." Otherwise I is silent magic.
+Also: I should announce something explicit when pressed and no active plan exists, or active plan exists but current verse is not in it. Suggested:
+No `activeStudyPlan`: *"No study plan active."*
+Active but verse not in plan: *"This verse is not part of the active study plan."*
+Active and matched: read the commentary.
+Silent fail is worse than friction. Screen-reader users especially need every keystroke to produce auditory acknowledgement.
+Blind Spot 2 — `M` notes editor on an overlay verse.
+A user writing a note on a Third Track verse may want to reference the AI commentary while writing. Consider: should I work inside the notes editor, or only in reading mode? My recommendation: only in reading mode. Inside an input field, I is a literal character. Anything else creates focus-trap escape risk (H-001 territory). The user can press I once before opening M to refresh memory, then write.
+Blind Spot 3 — Plan-active state has no auditory persistence.
+Once the welcome announcement passes ("Jumping to step 1 of 5..."), there's no ambient indication that a plan is active. A user returning to the app after task-switching has no way to know activeStudyPlan is still in memory. Mitigations:
+(a) On every verse-change announcement, append a brief tag if the verse is in the plan: *"...Step 3 of 5 in study plan."* Pro: ambient awareness. Con: verbosity penalty.
+(b) Add a status query key (e.g., the existing `R` for read-current-verse, or a dedicated key) that announces plan status. Pro: user-controlled. Con: requires user to remember to ask.
+(c) Do nothing; rely on `I` and `Alt+J` to return errors when not in plan. Pro: cheapest. Con: weakest UX.
+I recommend (a) but minimal — only append the tag on verses in the plan, not on every verse globally. So normal reading is unchanged; in-plan verses get a one-line suffix.
+Blind Spot 4 — `Alt+J` end-of-plan and beyond-end behavior.
+Spec says Alt+J advances. Need explicit answers:
+On step 5 of 5 → Alt+J: announce *"End of study plan. Press Escape to exit, or use arrows to continue reading."* Do NOT auto-clear `activeStudyPlan` (user may still want `I` on prior steps).
+After step 5, on Alt+J again: same announcement (idempotent), or jump back to step 1? Recommend idempotent — looping is surprising.
+Symmetric question: is there Alt+Shift+J (or similar) for previous step? The original Virtual Overlay proposal relied on Backspace +
+navigationHistory (c:\nbs\abible\app.js:27)
+. The Third Track inherits that. Confirm: Backspace is the only reverse path, OR add explicit prev-step. I'd add explicit prev — Alt+K is mnemonic-adjacent and unbound. But this is your call; either is defensible.
+Blind Spot 5 — `Escape` as exit gesture.
+Escape already drives
 clearAllModes (c:\nbs\abible\keyboard.js:124)
-/focus-trap should already shadow it — but worth user-testing once.
-indexedDB.deleteDatabase() (c:\BCI\VSCode-win32-x64-1.116.0\560a9dba96\resources\app\extensions\node_modules\typescript\lib\lib.dom.d.ts:22158)
-returns a request, not a promise. We fire-and-forget then immediately reload. If a versionchange listener elsewhere blocks deletion, the reload still proceeds and the next open will hit the same VersionError. Acceptable for a manual recovery path; flagging for awareness.
+. Adding "exit study plan" to its responsibilities means
+clearAllModes (c:\nbs\abible\keyboard.js:124)
+must:
+Clear `activeStudyPlan` if no input mode is active (regular reading).
+NOT clear it if an input mode (vault, JIT loading, notes, search) is active — those modes' Escape semantics take priority.
+Order: input-mode-clears first; if no input mode was clearing, then check activeStudyPlan and clear with announcement "Exiting study plan." This is a small but important precedence rule to lock in spec.
+3. State Management Risks
+Risk A — `activeStudyPlan` location.
+Where does this state live? Three options:
+(i) New module `jit/activePlan.js` with getter/setter/clear. Clean, testable, mirrors R-1/R-2 leaf pattern.
+(ii) Directly in
+keyboard.js (/c:/nbs/abible/keyboard.js)
+as a module-scope let. Cheapest. Tightest coupling.
+(iii) In
+app.js (/c:/nbs/abible/app.js)
+alongside
+memoryCache (c:\nbs\abible\db.js:11)
+. Co-located with other engine state.
+Recommend (i). Mirrors the existing JIT bounded context. Allows I handler in keyboard.js, Alt+J advance logic, lifecycle clears in
+app.js (/c:/nbs/abible/app.js)
+(
+fetchAndLoadBible (c:\nbs\abible\app.js:848)
+), and orchestrator's set-on-success all to import a single source of truth. No global pollution.
+Risk B — Mid-generation translation switch.
+User triggers JIT. While Gemini is generating, user switches translation. Now: should the in-flight plan be discarded, or saved-and-stale? Today the orchestrator has signal-cancellation infra (D-032). Lifecycle rule:
+fetchAndLoadBible (c:\nbs\abible\app.js:848)
+should also abort any in-flight orchestrator request via the AbortController. Otherwise plan arrives 3 seconds later and overwrites cleared state on the wrong translation. This is a real race. Mitigation: orchestrator owns its AbortController;
+fetchAndLoadBible (c:\nbs\abible\app.js:848)
+calls a new abortActiveJit() export.
+Risk C — Resume across reloads.
+The R-2 cache holds the generated content keyed by
+(topic, filter, model, schemaVersion, manifestId) (c:\nbs\abible\keyboard.js:231)
+. But after reload, activeStudyPlan is gone and the user has no way to know they were mid-plan. Two design choices:
+(i) **Accept it.** Plan is session-only. To resume, user re-issues the same query; cache hit makes that instant. Pro: simple, no new persistence. Con: user must remember the topic.
+(ii) **Persist `activeStudyPlan` summary to localStorage.** A tiny key like `jit_active_plan_id` storing the cacheKey. On boot, if present, announce *"A study plan is paused. Press Alt+J to resume, or Shift+J to dismiss."* Then load from cache.
+Option (ii) is ~10 lines and dramatically improves the offline-first promise. Recommend (ii). This is the real persistence answer R-5 was reaching for.
+Risk D — Plan invalidation when translation differs from generation translation.
+The plan was generated against a manifestId tied to a specific translation. If the user generates against BSB and switches to KJV, the verse IDs may map but the expected_text_snippet validation drift is real (Geneva 1599 vs BSB will diverge significantly). On translation switch, even if (ii) above is implemented, the resumed plan should refuse to load if
+manifestId (c:\nbs\abible\keyboard.js:231)
+mismatches and announce "Study plan was generated for a different translation." Hard rule.
+Risk E — Schema versioning of the JSON payload.
+The strict JSON shape (
+topic (c:\nbs\abible\keyboard.js:201)
+, summary, 5 verses with curriculum integer IDs and expected_text_snippet and
+commentary_text (c:\nbs\abible\keyboard.js:323)
+) is the new contract between Gemini and the engine. This changes the existing PlanValidator output shape. Either:
+(i) Update PlanValidator to emit the new shape (breaking R-2 cache entries; bump SCHEMA_VERSION from "v1" to "v2"; old cache entries become invalid and lazy-evicted, which the cache already handles).
+(ii) Keep PlanValidator's output and adapt at the consumer.
+Recommend (i). Bumping SCHEMA_VERSION is exactly what it's for. Clean break.
+4. UX Friction Points
+Concern Severity Mitigation
+New key I to remember Low helpMenuData entry + announce on press
+I on non-plan verse silence Medium Always announce, never silent
+No persistence across reload Medium localStorage cacheKey resume (Risk C ii)
+Translation switch loses plan Low Already correct — plan is translation-bound
+Alt+J is two-handed Low Acceptable for advanced operation
+End-of-plan ambiguity Low Idempotent end announcement
+Escape triple-meaning Medium Lock precedence order: input-modes → plan → noop
+Overall UX cost is low. Adding one new key and one new mode (active-plan) is well within the app's existing complexity envelope.
+5. Comparison Summary
+Property R-5 (DB Injection) Virtual Overlay Third Track
+User stores polluted Yes No No
+Y key overloaded Yes (Y → JIT commentary) Yes (Y → conditional) No (I is dedicated)
+Persistence Strong (durable in NOTES/COMMENTARY) None Cache-based; resume optional
+Resume across reload Yes (notes survive) No Optional via Risk C(ii)
+Routing complexity Medium High (precedence chain) Low (clean key separation)
+Code surface New persistence helper + future cleanup logic New routing fork New state module + 2 keys + lifecycle clears
+Conceptual purity Mixed (AI in user space) Mixed (Y means two things) Clean (one layer per key)
+Translation-switch risk Stale data in DB Stale overlay Cleanly invalidated
+The Third Track is strictly better on every axis except "raw durability of generated content." That trade-off is acceptable because:
+Cache provides re-generation at zero cost.
+localStorage resume hint covers the "I want to continue where I left off" case.
+We avoid permanently editing user artifact stores with non-user content.
+6. Honest Recommendation
+Adopt Third Track. Deprecate R-5 in the same commit. The R-5 work is not wasted — it surfaced exactly the architectural lesson that produced this proposal. That is what good iteration looks like.
+Decisions needed before draft:
+**`activeStudyPlan` location**: confirm new `jit/activePlan.js` module (recommended).
+**Resume hint via localStorage**: include or defer? (Recommend include — small cost, big win.)
+**`Alt+K` for previous step**: include or rely on Backspace alone? (Recommend Backspace alone for first cut; can add later.)
+**Ambient in-plan tagging on verse announcements**: include or defer? (Recommend include — minimal verbosity, large clarity gain.)
+**AbortController integration with
+fetchAndLoadBible (c:\nbs\abible\app.js:848)
+**: confirm we wire mid-flight abort.
+6. SCHEMA_VERSION bump from v1 to v2: confirm.
+Once those six are answered I can produce:
+The strict JSON contract spec.
+A unified diff covering: new `jit/activePlan.js`, orchestrator JSON contract update, removal of
+persistJitPlanToStudyArtifacts (c:\nbs\abible\keyboard.js:282)
+, I and Alt+J handlers, helpMenuData entry, Escape precedence update,
+fetchAndLoadBible (c:\nbs\abible\app.js:848)
+clear/abort, optional localStorage resume.
+Hub Save State for v67.2 with new Decisions (D-036+) capturing the deprecation of R-5 and the Third Track adoption.
+Standing by for your six answers.

@@ -24,6 +24,10 @@ import { startAutoPlay, pauseAutoPlay, stopAutoPlay, isAutoPlaying, autoPlaySett
 import { helpMenuData, NOTES_STORE, COMMENTARY_STORE, THEMES, muteTutorialPrompt, setMuteTutorialPrompt, DB_NAME } from './config.js';
 import { generateStudyPlan } from './jit/orchestrator.js';
 import { getKey, setKey, clearKey, hasKey, redactedDisplay } from './jit/vault.js';
+import {
+    getActivePlan, setActivePlan, clearActivePlan,
+    findStepForVerse, advanceStep, getCurrentStepVerse
+} from './jit/activePlan.js';
 
 // Active BYOK provider. Single-source-of-truth for R-3 wiring; R-7 will
 // promote this to a runtime selector across multiple providers.
@@ -205,11 +209,9 @@ export async function triggerJitStudyPlan(topic, filter = '') {
         return;
     }
 
-    // Capture the verse the user pressed G on. The plan's Master Note
-    // is anchored here regardless of any navigation that happens during
-    // the 30s generation window.
-    const startingNoteId = memoryCache[currentVerseIndex]?.id;
-    if (startingNoteId == null) {
+    // Sanity check: there must be an active verse to anchor the back-stack
+    // before we push history and jump to step 0.
+    if (memoryCache[currentVerseIndex]?.id == null) {
         speak("Cannot start study plan: no active verse.");
         return;
     }
@@ -229,18 +231,24 @@ export async function triggerJitStudyPlan(topic, filter = '') {
 
     try {
         const manifestId = (typeof localStorage !== 'undefined' && localStorage.getItem('currentBibleFile')) || 'default';
-        const plan = await generateStudyPlan(topic, filter, manifestId, {
+        const { plan, cacheKey } = await generateStudyPlan(topic, filter, manifestId, {
             signal: jitAbortController.signal
         });
 
         // Distinct completion tone — slightly higher than heartbeat, brief.
         playTone(880, 'sine', 0.15, 0.25);
 
-        // Persist the plan into NOTES_STORE (Master Note at startingNoteId)
-        // and COMMENTARY_STORE (per-node, keyed by curriculum integer ID).
-        await persistJitPlanToStudyArtifacts(plan, startingNoteId);
+        // Third Track: install plan as RAM-resident overlay. No DB writes.
+        setActivePlan(plan, { cacheKey, manifestId });
 
-        speak("Study plan saved. Use Alt+J in your notes to navigate steps and Y to hear the commentary.");
+        // Push current location to history so Backspace reverses out of
+        // the plan, then jump to step 0 and announce summary.
+        navigationHistory.push(currentVerseIndex);
+        const firstStep = getCurrentStepVerse();
+        speak(`Study plan ready. ${plan.summary || ''} Jumping to step 1 of ${plan.verses.length}. Press I for insight, Alt plus J for next step, Escape to exit.`);
+        if (firstStep) {
+            jumpTo(firstStep.book_name, firstStep.chapter, firstStep.verse);
+        }
     } catch (err) {
         let safe;
         if (isStudyPlanError(err)) {
@@ -268,67 +276,15 @@ export async function triggerJitStudyPlan(topic, filter = '') {
 }
 
 /**
- * R-5 Database Injection: persist a validated study plan into the
- * existing notes + commentary stores so the user can navigate steps
- * via Alt+J (Omni-Jump) and hear per-verse commentary via Y.
- *
- * Master Note format (Option A — parser-compatible):
- *   Step N: [[Book Chapter:Verse]]
- *
- * Both stores are written in a single readwrite transaction. Existing
- * note/commentary content is preserved; new content is appended below
- * a "--- AI Study Guide ---" separator.
+ * External hook for app.js: abort any in-flight JIT generation and
+ * clear the active plan overlay (e.g. on translation switch).
  */
-function persistJitPlanToStudyArtifacts(plan, startingNoteId) {
-    return new Promise((resolve, reject) => {
-        if (!db) return reject(new Error('DB unavailable'));
-
-        const stepLines = (plan.nodes || []).map((n, i) => {
-            const step = n.step || (i + 1);
-            return `Step ${step}: [[${n.book_name} ${n.chapter}:${n.verse}]]`;
-        }).join('\n');
-
-        const reflectionBlock = plan.closing_reflection
-            ? `\n\nClosing reflection: ${plan.closing_reflection}`
-            : '';
-        const masterNoteBody = `Study Plan: ${plan.plan_title || 'Untitled plan'}\n\n` +
-                              `${plan.plan_description || ''}\n\nSteps:\n${stepLines}${reflectionBlock}`;
-
-        const tx = db.transaction([NOTES_STORE, COMMENTARY_STORE], 'readwrite');
-        const notes = tx.objectStore(NOTES_STORE);
-        const comms = tx.objectStore(COMMENTARY_STORE);
-
-        // 1. Non-destructive Master Note injection at the starting verse.
-        const noteReadReq = notes.get(startingNoteId);
-        noteReadReq.onsuccess = () => {
-            const existing = noteReadReq.result?.content || '';
-            const merged = existing
-                ? `${existing}\n\n--- AI Study Guide ---\n${masterNoteBody}`
-                : masterNoteBody;
-            notes.put({ note_id: startingNoteId, content: merged });
-        };
-
-        // 2. Per-node commentary upserts keyed by curriculum integer ID.
-        (plan.nodes || []).forEach((node) => {
-            const verseMatch = memoryCache.find(v =>
-                v.book_name?.toLowerCase() === node.book_name?.toLowerCase() &&
-                v.chapter === node.chapter && v.verse === node.verse
-            );
-            if (!verseMatch) return;
-            const curriculumId = (verseMatch.book_number * 1000000) + (verseMatch.chapter * 1000) + verseMatch.verse;
-            const commReq = comms.get(curriculumId);
-            commReq.onsuccess = () => {
-                const existing = commReq.result?.content || '';
-                const merged = existing
-                    ? `${existing}\n\n--- AI Study Guide ---\n${node.commentary_text}`
-                    : node.commentary_text;
-                comms.put({ id: curriculumId, content: merged });
-            };
-        });
-
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-    });
+export function abortActiveJit(reason) {
+    if (jitAbortController) {
+        try { jitAbortController.abort(new DOMException(reason || 'translation-change', 'AbortError')); }
+        catch (_) { try { jitAbortController.abort(); } catch (_) {} }
+    }
+    clearActivePlan(reason || 'external');
 }
 
 // =====================================================================
@@ -1004,6 +960,24 @@ export function handleInput(event) {
     }
 
     if (key === 'Escape') {
+        // Third Track exit gesture: if no input/menu mode is active and
+        // a study plan overlay is live, Escape exits the plan. Input
+        // modes take precedence (their Escape semantics are owned by
+        // clearAllModes).
+        const anyInputMode =
+            isJitInputMode || isJitLoading || isVaultInputMode ||
+            isSearchMode || isNoteMode || isOptionsMenuMode ||
+            isAutoPlayMenuMode || isLibraryMode || isVersionMode ||
+            isHelpMode || isHelpMenuMode || isKeyboardExplorer ||
+            isBookSearchMode || isChapterMode || isVerseMode;
+
+        if (!anyInputMode && getActivePlan()) {
+            event.preventDefault();
+            clearActivePlan('user-exit');
+            speak("Exiting study plan.");
+            return;
+        }
+
         if (isAutoPlayMenuMode) { playAutoPlayUI('close'); }
         clearAllModes();
         event.preventDefault();
@@ -1371,6 +1345,23 @@ export function handleInput(event) {
                 };
             }
             break;
+        case 'I': {
+            event.preventDefault();
+            const plan = getActivePlan();
+            if (!plan) {
+                speak("No study plan active.");
+                break;
+            }
+            const curVerse = memoryCache[currentVerseIndex];
+            const step = findStepForVerse(curVerse);
+            if (!step) {
+                speak("This verse is not part of the active study plan.");
+                break;
+            }
+            speak(step.commentary_text || "No insight text for this step.");
+            updateVisualBuffer("AI INSIGHT", step.commentary_text || "");
+            break;
+        }
         case 'K':
             if (event.shiftKey) break;
             event.preventDefault();
@@ -1577,6 +1568,20 @@ export function handleInput(event) {
             if (!event.altKey) break;
             event.preventDefault();
             if (!db || !isReady) break;
+            // Third Track override: if a study plan is active, Alt+J
+            // advances through its 5-verse curriculum. End-of-plan is
+            // idempotent; the plan is NOT auto-cleared so I and Backspace
+            // remain useful on prior steps.
+            if (getActivePlan()) {
+                const next = advanceStep();
+                if (!next) {
+                    speak("End of study plan. Press Escape to exit, or use arrows to continue reading.");
+                    break;
+                }
+                navigationHistory.push(currentVerseIndex);
+                jumpTo(next.book_name, next.chapter, next.verse);
+                break;
+            }
             {
                 const curVerse = memoryCache[currentVerseIndex];
                 const currentVerseId = curVerse.id;

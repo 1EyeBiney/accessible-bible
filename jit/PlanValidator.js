@@ -28,23 +28,23 @@ export class PlanValidator {
 
     /**
      * Validates the generated plan against the local cache.
-     * @param {Object} planData - The JSON parsed object from the AI.
-     * @returns {Object} - A sanitized study plan containing only verified verses.
+     * @param {Object} planData - The JSON parsed object from the AI (v2 shape).
+     * @returns {Object} - A sanitized study plan { topic, summary, verses }.
      */
     validate(planData) {
-        if (!planData || !planData.nodes || !Array.isArray(planData.nodes)) {
+        if (!planData || !planData.verses || !Array.isArray(planData.verses)) {
             throw new SchemaError("Invalid plan format", {
                 userMessage: "The study engine returned a malformed plan. Please try again.",
                 recoverable: true
             });
         }
 
-        const validNodes = [];
+        const validVerses = [];
 
-        for (const node of planData.nodes) {
+        for (const node of planData.verses) {
             // 1. Structural integrity check for the specific node
             if (!node.book_name || !node.chapter || !node.verse || !node.expected_text_snippet) {
-                console.warn(`[Validator] Dropping node due to missing structural fields:`, node);
+                console.warn(`[Validator] Dropping verse due to missing structural fields:`, node);
                 continue;
             }
 
@@ -79,29 +79,28 @@ export class PlanValidator {
                 const matchRatio = matchCount / Math.max(1, expectedWords.length);
                 
                 if (matchRatio < 0.6) {
-                    console.warn(`[Validator] Fuzzy match failed for ${node.book_name} ${node.chapter}:${node.verse}. Dropping node.`);
+                    console.warn(`[Validator] Fuzzy match failed for ${node.book_name} ${node.chapter}:${node.verse}. Dropping verse.`);
                     continue; 
                 }
             }
 
-            // Node survived all checks; append to valid array
-            validNodes.push(node);
+            // Verse survived all checks; append.
+            validVerses.push(node);
         }
 
         // 4. Final Assessment
-        if (validNodes.length === 0) {
+        if (validVerses.length === 0) {
             throw new ValidationError("All generated verses failed local validation.", {
                 userMessage: "The study engine generated references that do not align with your current Bible translation. Please try a different topic.",
                 recoverable: true
             });
         }
 
-        // Return the sanitized plan for the orchestrator
+        // Return the sanitized plan for the orchestrator (v2 shape).
         return {
-            plan_title: planData.plan_title || "Study Plan",
-            plan_description: planData.plan_description || "",
-            closing_reflection: planData.closing_reflection || "",
-            nodes: validNodes 
+            topic: planData.topic || "Study Plan",
+            summary: planData.summary || "",
+            verses: validVerses
         };
     }
 }

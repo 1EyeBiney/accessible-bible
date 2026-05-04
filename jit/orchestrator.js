@@ -33,7 +33,7 @@ export async function generateStudyPlan(topic, filter, manifestId, { signal } = 
         manifestId: manifestId || 'default',
     });
     const cached = await cacheGet(cacheKey);
-    if (cached) return cached;
+    if (cached) return { plan: cached, cacheKey };
 
     // 3. Vault key fetch — block before any provider call.
     const apiKey = await getKey(ACTIVE_PROVIDER);
@@ -91,5 +91,19 @@ export async function generateStudyPlan(topic, filter, manifestId, { signal } = 
     cachePut(cacheKey, plan, { topic, filter, model: GEMINI_MODEL })
         .catch((err) => console.warn('[orchestrator] planCache.put failed:', err?.message || err));
 
-    return plan;
+    return { plan, cacheKey };
+}
+
+/**
+ * Boot-time resume helper: fetch a previously-cached plan by its cacheKey.
+ * Returns null if missing, poisoned, or evicted.
+ */
+export async function loadPlanFromCache(cacheKey) {
+    if (!cacheKey) return null;
+    try {
+        const cached = await cacheGet(cacheKey);
+        return cached || null;
+    } catch (_) {
+        return null;
+    }
 }

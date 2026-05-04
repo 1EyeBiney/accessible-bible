@@ -8,14 +8,17 @@ import { classifySensitivity, buildPromptHardener, loadCuratedFallback } from ".
 import { SafetyError, NetworkError, AuthError, QuotaError, ParsingError } from "./errors.js";
 import { GEMINI_MODEL } from "../config.js";
 
-// Define the Strict JSON Schema (Now featuring closing_reflection)
+// v2 Strict JSON Schema — Third Track contract.
+// Plan = { topic, summary, verses: [exactly 5] }
 const studyPlanSchema = {
     type: SchemaType.OBJECT,
     properties: {
-        plan_title: { type: SchemaType.STRING },
-        plan_description: { type: SchemaType.STRING },
-        nodes: {
+        topic:   { type: SchemaType.STRING, description: "User's study topic, restated concisely." },
+        summary: { type: SchemaType.STRING, description: "2 to 3 sentence overview of the study arc." },
+        verses: {
             type: SchemaType.ARRAY,
+            minItems: 5,
+            maxItems: 5,
             items: {
                 type: SchemaType.OBJECT,
                 properties: {
@@ -28,13 +31,9 @@ const studyPlanSchema = {
                 },
                 required: ["step", "book_name", "chapter", "verse", "expected_text_snippet", "commentary_text"]
             }
-        },
-        closing_reflection: { 
-            type: SchemaType.STRING,
-            description: "A concluding pastoral thought. If the topic is sensitive, this must include a gentle, non-prescriptive nudge toward human community or counseling."
         }
     },
-    required: ["plan_title", "plan_description", "nodes", "closing_reflection"]
+    required: ["topic", "summary", "verses"]
 };
 
 export class GeminiProvider {
@@ -68,11 +67,13 @@ export class GeminiProvider {
         const hardener = buildPromptHardener(sensitivity.level);
 
         // 2. Build the Prompt
-        const prompt = `You are a biblical study guide generator. 
-        The user needs a 3-step Bible study plan about: ${topic}. 
-        Filter the theological tone through the lens of: ${filter}. 
-        Ensure your verse references are accurate and your commentary is deeply encouraging but concise.
-        ${hardener}`; // The hardener dynamically injects rules for elevated topics
+        const prompt = `You are a biblical study guide generator.
+        The user needs a Bible study plan about: ${topic}.
+        Filter the theological tone through the lens of: ${filter}.
+        Return EXACTLY 5 verses, ordered as a coherent study arc, with each verse's expected_text_snippet drawn from a literal English translation.
+        The 'topic' field should restate the user's topic concisely. The 'summary' field should be 2 to 3 sentences describing the study arc.
+        Ensure verse references are accurate and commentary is deeply encouraging but concise.
+        ${hardener}`;
 
         // 3. Pre-flight abort check
         if (signal?.aborted) {
