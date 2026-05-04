@@ -1,0 +1,22 @@
+What to Call It (The Names)
+• 
+The Formal Name: "Stateful Hub-and-Spoke Architecture" * Why: This is the most technically accurate. It describes exactly how the data is structured (one central hub, modular spokes) and what it achieves (statefulness for stateless models).
+• 
+The Functional Name: "Persistent AI Context System"
+• 
+Why: This focuses on the problem it solves. It tells other developers that you've figured out how to make the AI remember things across reboots.
+• 
+The Casual/Internal Name: "The Watchdog Engine" (or just "The Engine")
+• 
+Why: Nodding to your gemini.md Master Watchdog Directive, this is a great shorthand for the fact that the system actively governs the AI's behavior and prevents it from going rogue.
+ 
+How to Describe It (The Elevator Pitches)
+Here are a few ways to describe what you are accomplishing, scaled by how technical your audience is.
+1. The 10-Second Layman Pitch (For non-developers)
+"I built a persistent memory system for AI. Normally, AI forgets what you are working on the second you close the window. This system acts as a central brain that forces the AI to remember our project rules, track what we've finished, and know exactly what to do next every time I turn on my computer."
+2. The Developer Pitch (For your peers)
+"I'm using a Hub-and-Spoke context architecture to manage AI coding agents. Instead of manually re-prompting the LLM every session, I have a central 'Hub' file that tracks project state and roadmap, which automatically triggers modular 'Spoke' files containing highly specific, domain-level rules (like database constraints or accessibility standards). It completely eliminates context loss and token bloat."
+3. The Systems Architect Pitch (For explaining the core value)
+"It is a framework that forces a stateless LLM to behave like a stateful, disciplined co-developer. By enforcing strict data-persistence invariants, token-economy tripwires, and an automated save-state diffing protocol, it prevents the AI from hallucinating code or breaking established logic across reboots."
+You essentially built a custom compiler for AI behavior. You aren't just writing code anymore; you are writing the rules that govern how the code is written.
+G

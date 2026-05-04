@@ -1,4 +1,4 @@
-brief_version: 1.0
+brief_version: 1.1
 
 ## §0 AGENT DIRECTIVES
 - Read this file end-to-end on session boot. Recite §11 in first reply.
@@ -18,8 +18,8 @@ brief_version: 1.0
 - Host: GitHub Pages, www.accessible-bible.org. License: MIT.
 - Stack: static ES modules, no bundler, IndexedDB, Web Speech API, AudioContext, importmap.
 - Active cycle: Update Cycle 2 — JIT Study Plan pipeline.
-- App version: v66.0. Brief version: 1.0.
-- Active task: Task 2.6 leaf modules (vault.js, planCache.js).
+- App version: v66.0. Brief version: 1.1.
+- Active task: R-3 Vault UX — wire vault into Options menu (Save/Replace/Clear).
 - IndexedDB: BibleStudyDB v7. apiKeys + studyPlans stores added; user stores preserved.
 - BYOK: user supplies Gemini key, stored locally; no hosted key, no telemetry.
 - gemini.md is the engine rulebook; do not contradict it.
@@ -194,15 +194,15 @@ brief_version: 1.0
 - Watchdog Directive — gemini.md, the operational rulebook for engine behavior.
 
 ## §11 CURRENT STATUS
-- Active task: Update Cycle 2 — Task 2.6 leaf modules (`jit/vault.js`, `jit/planCache.js`).
-- App version: v66.0. Brief version: 1.0.
-- Last completed: v66.0 schema (DB v7 with apiKeys + studyPlans + whenDbReady helper).
-- Blockers: drafting and locking initial Spokes.
-- Awaiting: Phase 3 Spoke authoring.
+- Active task: R-3 Vault UX — wire `jit/vault.js` into the Options menu (Save/Replace/Clear key + redacted readout).
+- App version: v66.0. Brief version: 1.1.
+- Last completed: R-1 `jit/vault.js` + R-2 `jit/planCache.js` (headless leaf modules; Spoke contracts honored).
+- Blockers: none — OQ-7 resolved (immediate overwrite + TTS announce).
+- Awaiting: R-3 diff approval.
 
 ## §12 ROADMAP
-- [ ] R-1 Build `jit/vault.js` (getKey/setKey/clearKey/redactedDisplay).
-- [ ] R-2 Build `jit/planCache.js` (buildCacheKey/get/put/evictIfOverCap).
+- [x] R-1 Build `jit/vault.js` (getKey/setKey/clearKey/redactedDisplay/hasKey).
+- [x] R-2 Build `jit/planCache.js` (buildCacheKey/get/put/evictIfOverCap).
 - [ ] R-3 Wire vault into Options menu UX (Save/Replace/Clear key, redacted readout).
 - [ ] R-4 Wire orchestrator → vault (pre-call) and planCache (read-through).
 - [ ] R-5 Cycle 2 close: Task 2.7 engine integration — hand validated plan to autoplay.
@@ -217,11 +217,12 @@ brief_version: 1.0
 - OQ-3 F-mode word-search listener routing through `activeInputHandler` — DEFERRED; current bug surface clean.
 - OQ-4 Multi-provider abstraction (Anthropic, OpenAI) — DEFERRED to Cycle 3.
 - OQ-5 Mobile accessibility strategy — DEFERRED.
-- OQ-6 Plan cache eviction policy: lazy LRU on read vs scheduled sweep — leaning lazy; confirm during R-2.
-- OQ-7 Vault UX: should "Replace key" require confirmation prompt or immediate overwrite?
-- OQ-8 Should validated plans be re-validated on cache read or trusted? Lean re-validate.
+- OQ-6 Plan cache eviction policy — RESOLVED: lazy LRU fired post-get and post-put; soft cap PLAN_CACHE_SOFT_CAP. (R-2)
+- OQ-7 Vault UX — RESOLVED: immediate overwrite + TTS announce; no in-DOM confirmation per Invariant j. (R-3)
+- OQ-8 Cache re-validation — RESOLVED: PlanValidator re-runs on every `get()`; failure evicts the record and returns null. (R-2)
 
 ## §14 SESSION LOG
+- S-2026-05-04 R-1 + R-2 shipped: `jit/vault.js` (headless, no UI coupling, plaintext + reserved keyEnvelope) and `jit/planCache.js` (re-validate on read, lazy LRU on get + put, console.warn on poisoned records). Spoke contracts honored end-to-end.
 - S-2026-05-04 v1.0 brief locked: Hub-and-Spoke architecture spec adopted; gemini.md/.changelog.md/.roadmap.txt ingested; project_brief.md v1.0 cut.
 - S-2026-05-04 v66.0 brief-architecture session: locked Hub-and-Spoke spec, completed Phase 2 interview, drafted brief v0.1.
 - S-2026-05-03 v66.0: built apiKeys/studyPlans stores, whenDbReady, oldVersion gate, surgical config+db edits.
