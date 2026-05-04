@@ -1,106 +1,132 @@
 Searched codebase for "Role: Senior Systems Architect
-Context Reset: We are resuming a session after a hard system reboot. Please ingest my current workspace files to restore your context. 
-Step 1: Context Hydration
-Please review the recent entries in .changelog.md (up to v67.3) and any recent watchdog/output logs in the directory. Acknowledge that you understand our current state:
-We are at v67.3.
-The "Third Track" architecture is live (`jit/activePlan.js` overlay, no database pollution).
-The IndexedDB schema is at v7 with audible error handling.
-Keyboard routing ('I' key, 'Alt + J', 'Shift + X' reset) is stable.
-The `AbortController` in `app.js` successfully cancels in-flight AI requests.
-Step 2: Architectural Evaluation (The Pivot)
-Before the reboot, our next objective was building the Study Library UI to recall cached plans. However, we are making a strategic pivot. We want to finalize the data shape before building the UI. 
-We want to upgrade the JIT generation to include:
-Theological Filters (e.g., allowing the user to type "Spurgeon" or "Moody" to flavor the commentary).
-Dynamic Verse Counts (allowing the user to request between 3 and 10 verses, rather than a hardcoded 5).
-Required Action:
-Do NOT write code yet. Please confirm you have ingested the v67.3 state, and then provide your architectural evaluation of this pivot. Specifically:
-How should we handle a multi-step input wizard for the 'G' key without overwhelming the user?
-How will adding filters and dynamic verse counts impact our caching strategy and the Gemini JSON schema?", 19 results. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.roadmap.txt, c:\nbs\abible\.rules\data-persistence.md, c:\nbs\abible\.rules\jit-feature.md, c:\nbs\abible\app.js, c:\nbs\abible\gemini.md, c:\nbs\abible\gemini.md, c:\nbs\abible\jit\activePlan.js, c:\nbs\abible\jit\GeminiProvider.js, c:\nbs\abible\jit\orchestrator.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\project_brief.md, c:\nbs\abible\project_brief.md, c:\nbs\abible\project_brief.md, c:\nbs\abible\project_brief.md
-Thinking: I'm reviewing the changelog and recent state files to understand the current context.
-Searched for files matching **/.changelog.md, 1 match. Files: c:\nbs\abible\.changelog.md
-Searched for files matching **/*watchdog*, 1 match. Files: c:\nbs\abible\.watchdog description.txt
-Running (Get-Item c:\nbs\abible\.changelog.md).Length; (Get-Content c:\nbs\abible\.ch.... (Get-Item c:\nbs\abible\.changelog.md).Length; (Get-Content c:\nbs\abible\.changelog.md | Measure-Object -Line).Lines
-Read .changelog.md, lines 1 to 484
-Read last_run.json
-Read .watchdog description.txt
-Thinking: Let me quickly review the JIT modules to get a clearer picture of how the schema is organized.
-Context hydrated. Acknowledging current state at v67.3:
-**Third Track is live**:
-activePlan.js (/c:/nbs/abible/jit/activePlan.js)
-holds in-memory plan overlay; NOTES_STORE/COMMENTARY_STORE remain pristine (R-5 deprecated).
-**DB schema v7**: `apiKeys` (vault) + `studyPlans` (composite-keyed cache) stores, with `whenDbReady()` gating, `VersionError` audible reporting, and the `Shift+X` Nuclear Reset escape hatch.
-**Keyboard routing stable**: `G` opens JIT input, `I` reads ambient insight without polluting notes, `Alt+J` advances active plan steps, `Escape` cleanly tears down the overlay before standard mode-clears, `Shift+X` resets DB.
-**AbortController** in `app.js::fetchAndLoadBible` cancels in-flight Gemini requests on translation switch.
-**Schema contract v2**: hard 5-verse JSON shape (the very thing this pivot now needs to relax).
-Confirmed — no code will be written. Architectural evaluation follows.
-Architectural Evaluation: The Pre-UI Pivot
-Pivoting to finalize data shape before the Library UI is the correct call. The Library's primary value is recall, and recall is meaningless if the recalled artifacts have a brittle/uniform shape. Locking the schema now prevents a v68→v69 cache invalidation cascade later.
-1. The 'G' Key Multi-Step Wizard — Avoiding Cognitive Overload
-The danger here is turning a single-keystroke ritual into a 4-prompt interrogation. We have three realistic patterns; I recommend a hybrid of (B) and (C):
-(A) Sequential Modal Wizard — G → topic → Enter → "verses?" → number → Enter → "flavor?" → text → Enter.
-*Pros*: Discoverable, screen-reader-linear.
-*Cons*: Three Enters before any AI call. Punishes the power user. Breaks the muscle memory we just stabilized in v67.
-(B) Single-Line DSL with Optional Sigils (recommended primary path)
-One input field, one Enter. Defaults preserved. Power users layer on:
+Context: We have critical accessibility and usability issues with the v68.0 Search Modal. Please patch v68.1.
+The Symptoms:
+Native `` Verbosity: Screen readers announce "8 of 9", which is confusing and unnecessary.
+Tab Interference: Tab navigation is not behaving as expected between modal fields.
+Enter Key Failure: The form does not submit on Enter, likely due to key interception by the global app engine.
+Required Architectural Changes:
+Virtual Select Component: Replace the native `` in index.html with a simple `<input type="text">`.
+- In keyboard.js, add a keydown handler for this input: 'ArrowUp' cycles values (3, 4, 5, 6, 7, 8, 9, 10, 15), 'ArrowDown' cycles the same, 'Enter' triggers the form submit.
+Tab Propagation: Update keyboard.js to ensure 'Tab' is NOT intercepted by the global engine while the JIT modal is active (`isJitInputMode`).
+Enter Key Handling: In handleInput(), ensure that if `isJitInputMode` is true, we do not call event.preventDefault() for 'Enter', allowing the native form submission to work, OR manually trigger jitModalFormEl.submit() inside the handler for 'Enter' to guarantee the form fires.
+Focus Cleanup: Ensure that when moving focus between fields, the "Third Track" heartbeat or global focus-trap doesn't attempt to reclaim focus.
+Action Required:
+Please provide the surgical diffs to:
+Replace the  in index.html with the virtual-select-ready input.
+Update keyboard.js to implement the ArrowUp/Down cycle logic for the verse count input.
+Update keyboard.js to fix the key interception logic so Enter and Tab work inside the modal.Role: Senior Systems Architect
+Context Update: We are proceeding with v68.0 (JIT Configuration & Customization). I have reviewed your evaluation regarding the 'G' key input, and I am rejecting both the single-line DSL and the multi-step wizard. 
+The Chosen Architecture: The Search Modal
+We will build a traditional, accessible Modal interface for the 'G' key. It must bridge the gap between screen-reader tab navigation and sighted user layout.
+Modal Requirements (HTML/JS):
+Fields:
+- Topic (Text input, auto-focused).
+- Filter (Text input, optional).
+- Verse Count (Select/Combobox: options 3, 4, 5, 6, 7, 8, 9, 10, 15. Default is 5).
+Keyboard Routing: 
+- Pressing 'Enter' from *any* of the three fields immediately submits the form and triggers generation.
+- 'Tab' navigates between fields natively.
+- 'Escape' closes the modal and returns focus to the engine.
+Engine, Validation, & Cache Requirements:
+Orchestrator Signature: Update `orchestrator.js` to accept `(topic, filter, verseCount)`.
+Sensitivity Guard: Route the new `filter` input through `classifySensitivity` alongside the topic to prevent prompt injection.
+Prompt Engineering: The Gemini JSON system instruction must dynamically insert the requested `verseCount`. It must explicitly constrain the `filter` parameter to modify the `commentary_text` voice ONLY, and strictly instruct the AI to NOT let the filter influence the actual verse selection.
+Response Envelope & Validator: The AI must echo `requested_verse_count` and `flavor` in its JSON envelope. Update `PlanValidator.js` to assert against this dynamic count instead of a hardcoded 5.
+Cache Integrity: Update the `cacheKey` generator to form a normalized tuple: e.g., `topic|filter|count|v3`. 
+Schema Bump: Bump `SCHEMA_VERSION` to 'v3' in `config.js`.
+Action Required:
+Please provide the surgical diffs needed to implement this Modal architecture. I will need:
+The HTML injection for the new Modal (to go in `index.html`).
+The `keyboard.js` updates to launch the modal on 'G', handle the form submission/cancel, and pass the three variables to the orchestrator.
+The `orchestrator.js` & `PlanValidator.js` updates (the dynamic prompt, the sensitivity check, the cache key, and the validation logic).
+The `config.js` schema bump.", 14 results. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.output.txt, c:\nbs\abible\.output.txt, c:\nbs\abible\.output.txt, c:\nbs\abible\.output.txt, c:\nbs\abible\.output.txt, c:\nbs\abible\.rules\jit-feature.md, c:\nbs\abible\app.js, c:\nbs\abible\gemini.md, c:\nbs\abible\index.html, c:\nbs\abible\keyboard.js, c:\nbs\abible\project_brief.md, c:\nbs\abible\project_brief.md
+Thinking: Looking at the handleInput function, it returns early when focus is on INPUT or TEXTAREA elements, which means the Enter key should work natively for form submission in the modal. But there might be another keydown handler in app.js that's interfering with this behavior.
+Searched for regex addEventListener\(&#39;keydown|preventDefault|focus-trap|focus\(\)|blur (**/app.js), 20 results. Files: c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js
+Read app.js, lines 615 to 700
+Thinking: The focus-trap blur exclusion already accounts for `isJitInputMode`, so that's covered. I'm checking whether `handleInput` returns early for INPUT/TEXTAREA elements—it does, which means Enter on topic or filter inputs should trigger the native form submit. The real issue might be that the form submit isn't firing in certain cases, possibly because the inputs need `type="text"` attributes or the form needs a proper submit button.
+Actually, forms with text inputs do submit natively on Enter, so the listener should fire. But if the user says it's not working, there's likely a global keydown listener on the document that's capturing Enter before it reaches the form. Let me trace where `handleInput` is connected and check for any document-level keydown handlers.
+Searched for regex document\.addEventListener|window\.addEventListener.*key|handleInput (**/app.js), 3 results. Files: c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js
+Thinking: I see the issue now — the SELECT element wasn't included in the early return check for INPUT/TEXTAREA, which is why Enter was being intercepted. Switching to a readonly INPUT element should fix that since it'll match the early return condition. But the user is still reporting that Enter and Tab are being captured, so there must be something else preventing these keys from reaching the input.
+Looking at the event flow, when Enter is pressed on an input inside the form, the keydown listener should return early before any preventDefault happens, allowing the default form submission to proceed. The form should submit since it has multiple inputs. But if the user is experiencing failures, it's possible the global keydown listener is calling preventDefault somewhere, or there's another listener interfering with the natural behavior.
+The real issue is likely the select element — when focus lands there, Enter doesn't trigger form submission natively, and the global keydown handler processes it without returning early since select isn't in the early-return list. So I need to replace the select with a readonly text input that cycles through values on arrow keys, add explicit Enter handling to submit the form, and make sure the global listener doesn't interfere with Tab navigation while the modal is active.
+Now applying the v68.1 fixes.
+1)
+index.html (/c:/nbs/abible/index.html)
+— Replace native &lt;select&gt; with readonly text input
+Replacing 12 lines with 2 lines in index.html
 ```
-faith of Abraham                    → 5 verses, no flavor (current behavior)
-faith of Abraham /7                 → 7 verses
-faith of Abraham /7 @Spurgeon       → 7 verses, Spurgeon flavor
-faith of Abraham @Moody             → 5 verses, Moody flavor
 ```
-*Pros*: Zero new keystrokes for existing users. Backwards-compatible. One Enter = one AI call. The `/n` and `@flavor` sigils are TTS-friendly ("slash seven, at Spurgeon"). Parser is ~10 lines of regex.
-*Cons*: Sigils are not self-discoverable. Mitigation: announce a one-time progressive-disclosure hint on first `G` press per session ("Optional: slash for verse count, at-sign for commentator flavor").
-(C) Modifier-Gated Advanced Mode (recommended secondary path)
-`G` → simple topic prompt (current UX, unchanged).
-`Shift+G` → full wizard (topic / count / flavor) for users who prefer guided entry.
-This preserves the v67.3 muscle memory exactly while giving discoverability a home.
-Why hybrid (B+C): Power users get the DSL. Discovery-oriented and screen-reader-fatigued users get Shift+G. Both code paths converge on the same JitRequest object before hitting the orchestrator, so the wizard is just a different front controller — no duplication in
-orchestrator.js (/c:/nbs/abible/jit/orchestrator.js)
-.
-2. Cache Strategy Impact
-The composite key in studyPlans is currently effectively topic (or a hash thereof). Adding two parameters means the cache key must become a tuple, or you'll get cache hits that return the wrong-flavored or wrong-length plan.
-Recommended composite key shape:
 ```
-{ topic: normalized, verseCount: int, flavor: normalized|null, schemaVersion: 'v3' }
 ```
-…serialized to a stable string (e.g., topic|count|flavor|v3). Notes:
-**Normalize aggressively**: lowercase, trim, collapse whitespace, strip punctuation on `topic` and `flavor`. Otherwise `"Spurgeon"`, `"spurgeon "`, and `"Spurgeon."` produce three cache misses for the same intent.
-**`flavor: null` is a real key**, not absent. A flavored plan and an unflavored plan on the same topic are *different artifacts* and must coexist in the cache.
-**`PLAN_CACHE_SOFT_CAP` pressure increases**. The flavor + count axes multiply the natural cardinality. Either (a) raise the cap modestly, or (b) bias LRU eviction toward flavored variants (treat the unflavored 5-verse plan as the "canonical" entry with eviction priority 0).
-**Bump `SCHEMA_VERSION` to `v3`** in
-config.js (/c:/nbs/abible/config.js)
-. v2 enforces strict 5-verse contract; any cached v2 plan loaded under v3 validation rules will either fail validation or, worse, silently return wrong-shaped data to the Library UI later. A clean invalidation now is cheap; a hybrid-validity period later is expensive.
-**Library UI implication (forward-looking)**: when you do build the recall UI, the listing must surface `verseCount` and `flavor` as first-class fields, not buried in metadata. Users will recall by *flavor*, not by topic alone ("the Spurgeon one on grace").
-3. Gemini JSON Schema Impact
-The current strict 5-verse contract enforced by PlanValidator.js should evolve, not loosen. Two concrete changes:
-(a) Echo the request parameters into the response envelope.
+2)
+keyboard.js (/c:/nbs/abible/keyboard.js)
+— Virtual select cycler, key routing fixes  
+First update the modal refs and constants:
+Replacing 99 lines with 179 lines in keyboard.js
 ```
-{
-  "plan_title": "...",
-  "plan_description": "...",
-  "requested_verse_count": 7,
-  "flavor": "Spurgeon",
-  "nodes": [ ... 7 entries ... ]
-}
 ```
-This lets the validator assert nodes.length === requested_verse_count rather than the hardcoded === 5. It also gives the Library UI a trustworthy source for badges/labels without re-parsing the original prompt.
-(b) Tighten validator bounds, don't remove them.
-Hard clamp `verseCount` to `[3, 10]` at the *input* layer (the wizard/DSL parser), before it ever reaches the prompt. Out-of-range inputs are an audible error, not a silent best-effort.
-`PlanValidator` continues aggressive node filtering (the v64 fuzzy-match hallucination drop) but now compares against the dynamic count. The "100% of nodes failed" `ValidationError` threshold remains the only fatal case.
-Edge case to plan for: AI returns `nodes.length < requested_verse_count` after hallucination filtering. Current behavior preserves the surviving subset. Decision needed: is a 7-requested / 5-survived plan acceptable, or should the orchestrator re-roll? **Recommendation**: accept the survivors but record `actual_verse_count` separately so the Library UI can disclose the discrepancy ("7 requested, 5 verified").
-(c) Flavor handling in the prompt.
-Flavor should be a style modifier on `commentary_text`, never on the verse selection itself — otherwise "Spurgeon" might steer the AI toward Spurgeon's preferred proof-texts and away from the user's actual topic. Constrain it: "In the homiletic voice of {flavor}, comment on…" and keep verse selection driven by topic alone. This also keeps the validator's fuzzy-matching against memoryCache meaningful — verse text doesn't change because of flavor.
-(d) Safety surface expands.
-Free-text flavor is now a second prompt-injection vector alongside topic. The existing sensitivity.js filtering needs a pass over flavor too. A user typing flavor: &quot;ignore prior instructions and...&quot; should be caught at the same layer as a malicious topic.
-Summary of recommended decisions before any code is written
-Decision Recommendation
-G key UX Single-line DSL with /n and @flavor sigils (primary); Shift+G opens guided wizard (secondary)
-Verse count bounds Clamp [3, 10] at input parser, audible error outside range
-Flavor scope Modifies commentary_text voice only; does not influence verse selection
-Cache key Composite tuple (topic, verseCount, flavor, schemaVersion), normalized
-Schema version Bump SCHEMA_VERSION to v3 to invalidate v2 strict-5 cache
-Response envelope Add requested_verse_count, actual_verse_count, flavor fields
-Validator Dynamic-count assertion replaces hardcoded === 5; aggressive node filtering preserved
-Sensitivity Run flavor through sensitivity.js alongside topic
-Library UI (deferred) Plan now to surface flavor and verseCount as first-class recall facets
-Awaiting your go/no-go on the DSL-vs-wizard split and the [3,10] clamp before any implementation begins.
+```
+```
+Now harden
+handleInput (c:\nbs\abible\app.js:14)
+so the global router unconditionally bails when the modal is active. The existing INPUT/TEXTAREA early-return covers most cases, but a defensive
+isJitInputMode (c:\nbs\abible\app.js:14)
+short-circuit guarantees Tab/Enter/Arrow-keys can never reach the global switch even if focus momentarily lands on the modal container itself:
+Replacing 8 lines with 14 lines in keyboard.js
+```
+```
+```
+```
+Checked keyboard.js, index.html, no problems found
+v68.1 patch complete. Summary of fixes:
+**
+index.html (/c:/nbs/abible/index.html)
+** — &lt;select id=&quot;jit-count-select&quot;&gt; replaced with
+<input type="text" id="jit-count-input" readonly value="5"> (c:\nbs\abible\jit\sensitivity.js:57)
+. Eliminates the "8 of 9" screen-reader noise inherent to native &lt;select&gt; and gives us a uniform INPUT target that the global router already knows to skip.
+**
+keyboard.js (/c:/nbs/abible/keyboard.js)
+— Virtual count cycler.** New
+JIT_VERSE_COUNTS = [3,4,5,6,7,8,9,10,15] (c:\nbs\abible\keyboard.js:300)
+array with
+jitCountIndex (c:\nbs\abible\keyboard.js:308)
+cursor and
+setJitCount(idx) (c:\nbs\abible\keyboard.js:323)
+writer. ArrowUp/ArrowRight advances, ArrowDown/ArrowLeft retreats (wraps both ends), each change announced as "N verses." Enter on the count input calls
+submitJitModal() (c:\nbs\abible\keyboard.js:330)
+. Character keys are swallowed (
+preventDefault (c:\nbs\abible\app.js:641)
++
+stopPropagation (c:\nbs\abible\app.js:669)
+) so screen readers don't try to type into the readonly box.
+**
+keyboard.js (/c:/nbs/abible/keyboard.js)
+— Modal-level capture-phase handler hardened.** Now does three things:
+1.
+e.stopPropagation() (c:\nbs\abible\app.js:581)
+on every key — guarantees no modal keystroke ever leaks to the
+window (c:\nbs\abible\app.js:601)
+keydown router.
+2. Escape → tear-down (unchanged).
+3. Enter → calls
+submitJitModal() (c:\nbs\abible\keyboard.js:330)
+via
+form.requestSubmit() (c:\nbs\abible\keyboard.js:334)
+(which fires the submit listener; plain .submit() would bypass it). Skipped when target is the count input — that input's own handler wins to avoid double-fire.
+4. `Tab` is intentionally untouched — no
+preventDefault (c:\nbs\abible\app.js:641)
+, no branching. Native focus traversal Topic → Filter → Count works.
+keyboard.js::handleInput — Added defensive if (isJitInputMode) return; immediately after the
+isInitialized (c:\nbs\abible\app.js:34)
+guard. Belt-and-suspenders alongside the existing INPUT/TEXTAREA short-circuit: even if focus momentarily lands on the modal container itself (during inter-field transitions or after a synthetic dispatch), the global router cannot fire its switch and cannot call
+preventDefault (c:\nbs\abible\app.js:641)
+on Tab/Enter/Arrows.
+Focus-trap reclaim — already excluded
+isJitInputMode (c:\nbs\abible\app.js:14)
+from the blur reclaim in
+app.js#L655 (/c:/nbs/abible/app.js:655)
+; no change needed. The Third Track heartbeat is gated by
+isJitLoading (c:\nbs\abible\app.js:14)
+, not
+isJitInputMode (c:\nbs\abible\app.js:14)
+, so it can't fire while the modal is open.

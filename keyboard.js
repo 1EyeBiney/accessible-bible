@@ -294,16 +294,21 @@ export function abortActiveJit(reason) {
 }
 
 // =====================================================================
-// JIT Study Plan — Search Modal (v68.0)
+// JIT Study Plan — Search Modal (v68.0 / v68.1)
 // =====================================================================
+
+const JIT_VERSE_COUNTS = [3, 4, 5, 6, 7, 8, 9, 10, 15];
+const JIT_DEFAULT_COUNT = 5;
 
 let jitModalEl = null;
 let jitModalFormEl = null;
 let jitTopicInputEl = null;
 let jitFilterInputEl = null;
-let jitCountSelectEl = null;
+let jitCountInputEl = null;
+let jitCountIndex = JIT_VERSE_COUNTS.indexOf(JIT_DEFAULT_COUNT);
 let jitModalSubmitHandler = null;
 let jitModalKeydownHandler = null;
+let jitCountKeydownHandler = null;
 
 function ensureJitModalRefs() {
     if (jitModalEl) return true;
@@ -311,8 +316,26 @@ function ensureJitModalRefs() {
     jitModalFormEl = document.getElementById('jit-modal-form');
     jitTopicInputEl = document.getElementById('jit-topic-input');
     jitFilterInputEl = document.getElementById('jit-filter-input');
-    jitCountSelectEl = document.getElementById('jit-count-select');
-    return !!(jitModalEl && jitModalFormEl && jitTopicInputEl && jitFilterInputEl && jitCountSelectEl);
+    jitCountInputEl = document.getElementById('jit-count-input');
+    return !!(jitModalEl && jitModalFormEl && jitTopicInputEl && jitFilterInputEl && jitCountInputEl);
+}
+
+function setJitCount(idx) {
+    if (!jitCountInputEl) return;
+    const len = JIT_VERSE_COUNTS.length;
+    jitCountIndex = ((idx % len) + len) % len;
+    jitCountInputEl.value = String(JIT_VERSE_COUNTS[jitCountIndex]);
+}
+
+function submitJitModal() {
+    if (!jitModalFormEl) return;
+    // Use requestSubmit so the registered 'submit' handler fires;
+    // .submit() bypasses listeners and would skip our pipeline.
+    if (typeof jitModalFormEl.requestSubmit === 'function') {
+        jitModalFormEl.requestSubmit();
+    } else {
+        jitModalFormEl.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    }
 }
 
 export function closeJitModal(announce = false) {
@@ -325,10 +348,14 @@ export function closeJitModal(announce = false) {
         jitModalEl.removeEventListener('keydown', jitModalKeydownHandler, true);
         jitModalKeydownHandler = null;
     }
+    if (jitCountKeydownHandler && jitCountInputEl) {
+        jitCountInputEl.removeEventListener('keydown', jitCountKeydownHandler);
+        jitCountKeydownHandler = null;
+    }
     jitModalEl.style.display = 'none';
     jitTopicInputEl.value = '';
     jitFilterInputEl.value = '';
-    jitCountSelectEl.value = '5';
+    setJitCount(JIT_VERSE_COUNTS.indexOf(JIT_DEFAULT_COUNT));
     isJitInputMode = false;
     document.getElementById('focus-trap')?.focus();
     if (announce) speak("Study plan cancelled.");
@@ -342,25 +369,74 @@ function openJitModal() {
     isJitInputMode = true;
     jitTopicInputEl.value = '';
     jitFilterInputEl.value = '';
-    jitCountSelectEl.value = '5';
+    setJitCount(JIT_VERSE_COUNTS.indexOf(JIT_DEFAULT_COUNT));
     jitModalEl.style.display = 'flex';
 
-    // Enter from any field submits the form natively. Capture-phase Escape
-    // tears the modal down regardless of which field has focus.
+    // Capture-phase keydown on the modal root.
+    //   - Escape: tear down (must beat anything else).
+    //   - Enter:  force form submit (some screen readers swallow native
+    //             implicit submit on text inputs, and the readonly count
+    //             input would never submit on its own).
+    //   - Tab:    let it propagate natively (do NOT preventDefault).
+    //   stopPropagation() on every key prevents the global window keydown
+    //   handler from acting on modal keystrokes.
     jitModalKeydownHandler = (e) => {
+        e.stopPropagation();
         if (e.key === 'Escape') {
             e.preventDefault();
-            e.stopPropagation();
             closeJitModal(true);
+            return;
         }
+        if (e.key === 'Enter') {
+            // The readonly count input has its own Enter handler that
+            // also calls submitJitModal(); guard against double-fire by
+            // letting the count handler win when it's the target.
+            if (e.target === jitCountInputEl) return;
+            e.preventDefault();
+            submitJitModal();
+            return;
+        }
+        // Tab and all other keys: do nothing. Native focus traversal
+        // between Topic → Filter → Count handles itself.
     };
     jitModalEl.addEventListener('keydown', jitModalKeydownHandler, true);
+
+    // Verse-count cycler: ArrowUp/Down moves through JIT_VERSE_COUNTS.
+    // Enter submits. Everything else is swallowed so screen readers do
+    // not announce typing into a readonly box.
+    jitCountKeydownHandler = (e) => {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowRight') {
+            e.preventDefault();
+            e.stopPropagation();
+            setJitCount(jitCountIndex + 1);
+            speak(`${JIT_VERSE_COUNTS[jitCountIndex]} verses.`);
+        } else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
+            e.preventDefault();
+            e.stopPropagation();
+            setJitCount(jitCountIndex - 1);
+            speak(`${JIT_VERSE_COUNTS[jitCountIndex]} verses.`);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+            submitJitModal();
+        } else if (e.key === 'Tab' || e.key === 'Escape') {
+            // Let the modal-level handler (Escape) or native focus
+            // traversal (Tab) take over.
+            return;
+        } else {
+            // Block character keys from being typed into the readonly
+            // input and block them from leaking to the global handler.
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    };
+    jitCountInputEl.addEventListener('keydown', jitCountKeydownHandler);
 
     jitModalSubmitHandler = (e) => {
         e.preventDefault();
         const topic = (jitTopicInputEl.value || '').trim();
         const filter = (jitFilterInputEl.value || '').trim();
-        const verseCount = parseInt(jitCountSelectEl.value, 10) || 5;
+        const verseCount = JIT_VERSE_COUNTS[jitCountIndex] || JIT_DEFAULT_COUNT;
 
         if (!topic) {
             speak("Topic is required.");
@@ -377,6 +453,10 @@ function openJitModal() {
         if (jitModalKeydownHandler) {
             jitModalEl.removeEventListener('keydown', jitModalKeydownHandler, true);
             jitModalKeydownHandler = null;
+        }
+        if (jitCountKeydownHandler && jitCountInputEl) {
+            jitCountInputEl.removeEventListener('keydown', jitCountKeydownHandler);
+            jitCountKeydownHandler = null;
         }
         jitModalEl.style.display = 'none';
         isJitInputMode = false;
@@ -420,6 +500,12 @@ export function handleInput(event) {
         }
         return;
     }
+    // Modal escape hatch: while the JIT Search Modal is open, the modal's
+    // own listeners own every key. The global router must NOT preventDefault
+    // or branch on Tab / Enter / Arrows here — otherwise native focus
+    // traversal between Topic → Filter → Count breaks, and Enter never
+    // reaches submitJitModal().
+    if (isJitInputMode) return;
     if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return;
 
     const key = event.key;

@@ -103,18 +103,8 @@
                 <label for="jit-filter-input" style="font-size: 1.2rem; font-weight: bold;">Filter <span style="font-weight: normal; opacity: 0.7;">(optional — e.g., Spurgeon, Moody)</span></label>
                 <input type="text" id="jit-filter-input" name="filter" autocomplete="off" style="font-size: 1.3rem; padding: 10px; background: var(--bg-color); color: var(--text-color); border: 2px solid var(--text-color); border-radius: 4px;">
 
-                <label for="jit-count-select" style="font-size: 1.2rem; font-weight: bold;">Verse Count</label>
-                <select id="jit-count-select" name="verseCount" style="font-size: 1.3rem; padding: 10px; background: var(--bg-color); color: var(--text-color); border: 2px solid var(--text-color); border-radius: 4px;">
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                    <option value="5" selected>5</option>
-                    <option value="6">6</option>
-                    <option value="7">7</option>
-                    <option value="8">8</option>
-                    <option value="9">9</option>
-                    <option value="10">10</option>
-                    <option value="15">15</option>
-                </select>
+                <label for="jit-count-input" style="font-size: 1.2rem; font-weight: bold;">Verse Count <span style="font-weight: normal; opacity: 0.7;">(Up and Down arrows to change)</span></label>
+                <input type="text" id="jit-count-input" name="verseCount" readonly value="5" aria-label="Verse Count. Use Up and Down arrows to change." style="font-size: 1.3rem; padding: 10px; background: var(--bg-color); color: var(--text-color); border: 2px solid var(--text-color); border-radius: 4px; cursor: default;">
             </form>
         </div>
 
