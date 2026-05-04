@@ -7,6 +7,7 @@ import {
 } from './config.js';
 
 export let db = null;
+export let isReady = false;
 export let memoryCache = [];
 export let bookmarksCache = [];
 
@@ -27,6 +28,7 @@ export function initDatabase(callback) {
 
     request.onupgradeneeded = (event) => {
         const upgradeDb = event.target.result;
+        const oldVersion = event.oldVersion || 0;
 
         // Bulldoze TEXT_STORE on every upgrade so corrected scripture data
         // is force-refreshed from the network. User-owned stores below are
@@ -43,18 +45,20 @@ export function initDatabase(callback) {
             }
         });
 
-        // --- v8: JIT feature stores. Preserved across all future upgrades. ---
-        // API_KEYS_STORE: single record per provider. keyPath = 'provider'.
-        if (!upgradeDb.objectStoreNames.contains(API_KEYS_STORE)) {
-            upgradeDb.createObjectStore(API_KEYS_STORE, { keyPath: "provider" });
-        }
+        // --- v7: JIT feature stores. Created once; preserved on all future upgrades. ---
+        if (oldVersion < 7) {
+            // API_KEYS_STORE: one record per provider. keyPath = 'provider'.
+            if (!upgradeDb.objectStoreNames.contains(API_KEYS_STORE)) {
+                upgradeDb.createObjectStore(API_KEYS_STORE, { keyPath: "provider" });
+            }
 
-        // STUDYPLANS_STORE: composite-keyed cache of validated study plans.
-        // keyPath = 'cacheKey' (slugified hash of topic|filter|model|schemaVersion|manifestId).
-        // Index 'lastAccessed' supports LRU eviction sweeps.
-        if (!upgradeDb.objectStoreNames.contains(STUDYPLANS_STORE)) {
-            const planStore = upgradeDb.createObjectStore(STUDYPLANS_STORE, { keyPath: "cacheKey" });
-            planStore.createIndex("lastAccessed", "lastAccessed", { unique: false });
+            // STUDYPLANS_STORE: composite-keyed cache of validated study plans.
+            // keyPath = 'cacheKey' (slugified topic|filter|model|schemaVersion|manifestId).
+            // 'lastAccessed' index supports LRU eviction sweeps.
+            if (!upgradeDb.objectStoreNames.contains(STUDYPLANS_STORE)) {
+                const planStore = upgradeDb.createObjectStore(STUDYPLANS_STORE, { keyPath: "cacheKey" });
+                planStore.createIndex("lastAccessed", "lastAccessed", { unique: false });
+            }
         }
     };
 }
@@ -98,6 +102,7 @@ export function loadToMemory(callback) {
         memoryCache.sort((a, b) => (a.book_number - b.book_number) || (a.chapter - b.chapter) || (a.verse - b.verse));
         
         loadBookmarks(() => {
+            isReady = true;
             const helperText = muteTutorialPrompt ? "" : " Press H for audio tutorial, or Shift plus H to mute this prompt.";
             speak("Library ready. Use left and right arrows to read. Press M to edit note." + helperText);
             if (callback) callback();
@@ -122,4 +127,23 @@ export function loadBookmarks(callback) {
             
         if (callback) callback();
     };
+}
+
+// --- whenDbReady ---
+// Resolves once the database handle is open and the in-memory caches
+// are hydrated. Used by jit/* leaf modules that may import before
+// initDatabase() completes its async chain.
+export function whenDbReady() {
+    return new Promise((resolve) => {
+        if (db && isReady) {
+            resolve();
+            return;
+        }
+        const interval = setInterval(() => {
+            if (db && isReady) {
+                clearInterval(interval);
+                resolve();
+            }
+        }, 25);
+    });
 }

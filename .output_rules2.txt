@@ -1,0 +1,142 @@
+Searched codebase for "Claude, we are in agreement on the architecture. Here are the answers to your three questions to finalize Phase 1:
+1. 
+Tier Model: We accept the three-tier split (Invariants / Decisions / Preferences).
+2. 
+Spoke Activation: We will use explicit YAML triggers for deterministic activation.
+3. 
+Hub Size Cap: We accept the ~400 line cap with a strict archive policy to /.rules/_archive/.
+Before you provide the Phase 1 spec, I have one major operational constraint we must address: Token Economy and Cost. I am paying for this context window out of pocket. I need this Hub and Spoke system to be ruthlessly efficient with tokens.
+Please provide the final Phase 1 one-page spec. Within this spec, explicitly outline our protocols for token management (e.g., how to keep spokes lean, how to write dense markdown, when to summarize vs. append, and how you will avoid context bloat when updating the save state).
+Once you provide the spec, let me know, and we will immediately begin the Phase 2 Interview Pass.
+G", 18 results. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.roadmap.txt, c:\nbs\abible\data\build_commentaries.js, c:\nbs\abible\data\build_commentaries.js, c:\nbs\abible\gemini.md, c:\nbs\abible\gemini.md, c:\nbs\abible\gemini.md, c:\nbs\abible\jit\errors.js, c:\nbs\abible\jit\GeminiProvider.js, c:\nbs\abible\jit\sensitivity.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\test_gemini.js
+Phase 1 Spec — Hub & Spoke Architecture v1.0
+Status: Locked. Authoritative reference for Phase 2+.
+1. Hub Schema (
+project_brief.md (/c:/nbs/abible/project_brief.md)
+)
+Fixed section order. Hard cap: 400 lines. Each section has a line budget.
+# Section Cap Purpose
+0 AGENT DIRECTIVES 15 Boot rules. Read first, every time.
+1 PINNED CONTEXT 20 Survives summarization. 5–10 facts max.
+2 PROJECT 10 Name, purpose, one-line elevator.
+3 TECH STACK 15 Languages, runtimes, key deps. No prose.
+4 CONVENTIONS 25 Naming, versioning, file layout. Show, don't describe.
+5 INVARIANTS 30 Must-never-violate. Block-and-ask on conflict.
+6 DECISIONS 60 Settled trade-offs. Last 20; older → archive.
+7 PREFERENCES 20 Defaults. Deviation allowed with one-line note.
+8 KNOWN HAZARDS 30 Battle scars. Anti-patterns we already paid for.
+9 CORE FILES 20 Map of high-leverage modules. One line each.
+10 GLOSSARY 30 Domain terms. Term — definition.
+11 CURRENT STATUS 10 Active task, version, blockers.
+12 ROADMAP 25 Upcoming cycles/tasks. Strikethrough done.
+13 OPEN QUESTIONS 15 Deferred decisions holding pen.
+14 SESSION LOG 50 Last 10 entries. Older → archive.
+15 SPOKE ACTIVATION MAP 20 Lookup table only.
+16 SAVE STATE PROTOCOL 25 Triggers, format, cadence.
+Total budget: 400 lines. Version stamp at top: brief_version: X.Y (Y = save-state increment, X = manual milestone bump).
+2. Spoke Schema (.rules/&lt;name&gt;.md)
+Hard cap: 150 lines per Spoke. Required header:
+```
+---
+spoke: <kebab-case-name>
+version: 1.0
+activates_when:
+  files_touched: [glob, glob]
+  keywords: [term, term]
+  tasks: [task-type]
+load_priority: high | medium | low
+supersedes: []
+---
+```
+Required body sections (in order):
+`INVARIANTS` — bulleted, testable.
+`DECISIONS` — what we picked and why (one line each).
+`HAZARDS` — anti-patterns specific to this domain.
+`WORKED EXAMPLES` — minimal, copy-pasteable.
+`CROSS-REFS` — links to other Spokes only when needed.
+No prose paragraphs. Bullets, tables, code fences only.
+3. Three-Tier Authority Model
+Tier Agent Behavior on Conflict
+INVARIANT Block. Refuse. Ask. No exceptions.
+DECISION Pause. Surface the prior decision. Require explicit reopen.
+PREFERENCE Proceed. Note deviation in one line.
+4. Spoke Activation Protocol
+Deterministic, not inferred:
+On every user request, scan files mentioned + keywords + task type.
+Match against `SPOKE ACTIVATION MAP` (Hub) → load matching Spokes.
+If multiple match, load by `load_priority` (high first).
+**Never** load all Spokes preemptively.
+If a Spoke is already loaded this session, do not re-read.
+5. Boot Sequence
+Mandatory first-turn behavior in any new session:
+Read
+project_brief.md (/c:/nbs/abible/project_brief.md)
+end-to-end.
+2. Recite back the CURRENT STATUS line.
+3. Read latest SESSION LOG entry.
+4. Identify Spokes triggered by the user's first request; load them.
+5. State understanding before acting.
+6. Save-State Protocol
+Triggers (only these):
+Roadmap task completed.
+Invariant added/changed.
+Architectural decision finalized.
+User says "save state."
+Never mid-task, never speculatively.
+Format:
+Agent proposes a unified diff in chat *before* writing.
+User confirms.
+Agent applies via surgical edit (existing anti-truncation protocol).
+`brief_version` Y bumps by 1.
+Append vs. summarize rules:
+`SESSION LOG`: append one line. If at 10, evict oldest to `_archive/sessions-YYYY-QN.md`.
+`DECISIONS`: append. If at 20, evict oldest to `_archive/decisions.md`.
+`CURRENT STATUS`: overwrite (not append).
+`ROADMAP`: edit in place — strikethrough completed, add new.
+`KNOWN HAZARDS`: append; never evict (these are paid-for in pain).
+7. Token Economy Protocols
+This is the operational spine. Every rule below exists to minimize tokens-per-decision.
+7.1 Hub Density Rules
+**Tables over prose.** Anything enumerable → table.
+**One fact per line.** No multi-clause sentences.
+**No filler.** Strip "this section describes," "the purpose of," "in order to."
+**Backticks for symbols.** Always. Saves disambiguation tokens.
+**Acronyms after first definition.** Define once in `GLOSSARY`, then reuse.
+**Numbers, not words.** "20" not "twenty."
+7.2 Spoke Density Rules
+**No introductions.** Header → invariants. No "this spoke covers..."
+**Code over commentary.** A 5-line example beats a 5-sentence explanation.
+**Cross-ref, don't duplicate.** If a fact lives in another Spoke, link, don't restate.
+**Kill examples that earn no rule.** If an example doesn't lock down a constraint, delete it.
+7.3 Loading Discipline
+**Lazy by default.** Spokes load only on activation match.
+**One-and-done.** A Spoke loaded once per session is not re-read.
+**Hub > Spoke for boot.** If the Hub answers it, never load a Spoke.
+**Reject "just in case" loads.** If unsure a Spoke is needed, ask the user before loading.
+7.4 Save-State Discipline
+**Diff, not rewrite.** Save-state always proposes a unified diff. Never re-emits the full file.
+**Smallest viable edit.** One section changed = one section in the diff.
+**No commentary in the file.** Explanations go in chat, not in
+project_brief.md (/c:/nbs/abible/project_brief.md)
+.
+**Archive purges, not duplicates.** When evicting from Hub → archive, the entry leaves the Hub entirely.
+7.5 Conversation Discipline (agent-side)
+**No re-stating context.** I do not echo the Hub back to you mid-session.
+**No progress narration.** "Now I will..." is banned. Just do it.
+**Confirm completion in ≤2 sentences.** Diff already speaks for itself.
+**Block early.** If I detect a conflict, I stop *before* doing the work, not after.
+**Question batching.** If I need clarification, batch all questions into one turn.
+7.6 Anti-Bloat Tripwires
+Hub > 400 lines → halt edits, propose archive sweep.
+Spoke > 150 lines → halt edits, propose split.
+`DECISIONS` > 20 → archive oldest before adding new.
+`SESSION LOG` > 10 → archive oldest before adding new.
+Same fact appears in Hub + Spoke → halt, deduplicate to Spoke, leave Hub pointer only.
+7.7 Cost-Aware Defaults
+When a task can be done with a Spoke load *or* an interactive question, **prefer the question** if the Spoke is > 80 lines and the question is < 3 lines.
+When summarizing chat, prefer pruning to compression — drop irrelevant turns rather than re-encode them.
+Never paste a full file into chat as "context" if a path + line range will do.
+8. Phase 2 Readiness
+Spec locked. Ready to begin Phase 2 Interview Pass.
+Next turn from me, on your "go": a structured interview — 12–18 questions, batched into one message, organized by Hub section, designed so your answers map directly into the v0.1 draft with zero re-asking.
+Standing by. Say go to begin.
