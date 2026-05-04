@@ -12,7 +12,7 @@ import {
 } from './audio.js';
 import { db, memoryCache, bookmarksCache, initDatabase, loadBookmarks, loadToMemory, setMemoryCache } from './db.js';
 import { handleInput, clearAllModes, setSearchMode, setNoteMode, getSearchMode, getNoteMode, setSearchResults, setCurrentSearchResultIndex, updateSearchVisualBuffer, clearVisualBuffer, updateVisualBuffer, isJitInputMode, isJitLoading, isVaultInputMode, abortActiveJit } from './keyboard.js';
-import { getResumeHint, setActivePlan, clearActivePlan } from './jit/activePlan.js';
+import { getResumeHint, setActivePlan, clearActivePlan, getActivePlan } from './jit/activePlan.js';
 import { loadPlanFromCache } from './jit/orchestrator.js';
 
 export { memoryCache };
@@ -339,6 +339,22 @@ export function readCurrentVerse(forceFull = false, customPrefix = null) {
 
     // Initial visual render uses synchronous flags; link flag is resolved from note content below.
     renderVisualVerse(false);
+
+    // Third Track ambient awareness: if this verse belongs to the active
+    // study plan, append a step-progress tag so the user always knows
+    // they are reading curriculum content.
+    const _plan = getActivePlan();
+    if (_plan && Array.isArray(_plan.verses)) {
+        const _bn = (verseObj.book_name || '').toLowerCase();
+        const _idx = _plan.verses.findIndex(v =>
+            (v.book_name || '').toLowerCase() === _bn &&
+            v.chapter === verseObj.chapter &&
+            v.verse === verseObj.verse
+        );
+        if (_idx !== -1) {
+            ttsPrefix += `Step ${_idx + 1} of ${_plan.verses.length} in study plan. `;
+        }
+    }
 
     speak(ttsPrefix + verseObj.text);
 
