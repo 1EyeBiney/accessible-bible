@@ -1,117 +1,90 @@
 Searched codebase for "Role: Senior Systems Architect
-Context Update: We have successfully implemented the v65.2 Atomic Patch. The focus-trap now respects JIT modes, and the search input correctly manages its listeners. Integration tests confirm the pipeline is functional from input through error mapping.
-We are now moving to Task 2.6: The Vault (API Key Storage) & The Cache (Study Plans).
-Based on our verified strategy:
-Vault: We will use IndexedDB for a single-record-per-provider store.
-Redaction: TTS will announce "Configured/Missing" and show only the last 4 characters when saving.
-Cache: We will use a composite key (topic + filter + model + schemaVersion + manifestId) with an LRU eviction policy.
-Required Action:
-Please provide the specific schema updates for db.js and config.js to implement the 'apiKeys' and 'studyPlans' stores. Ensure these stores are preserved during any future scripture-data refreshes.", 15 results. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.output.txt, c:\nbs\abible\.roadmap.txt, c:\nbs\abible\.roadmap.txt, c:\nbs\abible\.todo.txt, c:\nbs\abible\config.js, c:\nbs\abible\db.js, c:\nbs\abible\gemini.md, c:\nbs\abible\gemini.md, c:\nbs\abible\gemini.md, c:\nbs\abible\jit\errors.js, c:\nbs\abible\jit\orchestrator.js, c:\nbs\abible\jit\PlanValidator.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\test_gemini.js
-Thinking: I need to check the current database and configuration files to understand what changes are needed and provide precise diffs.
-Read db.js
-Read config.js
-Thinking: I need to increment the database version to 8 so I can add the new stores, since the current v7 handler won't create them. I'm also noting that the existing upgrade pattern wipes TEXT_STORE on every migration, but the annotation stores survive because they use conditional creation logic.
-Replacing 24 lines with 49 lines in config.js, db.js
+Context: Our JIT focus is being hijacked by the global focus-trap because the JIT modes are missing from the exclusion list.
+Please perform these targeted refactors in app.js:
+Update Imports: 
+In the import statement from './keyboard.js', add 'isJitInputMode' and 'isJitLoading'.
+Update Blur Listener:
+Locate the focusTrap.addEventListener('blur', ...) block. 
+Update the condition to include !isJitInputMode and !isJitLoading:
+if (isInitialized && !getSearchMode() && !getNoteMode() && !isWelcomeMode && !isTutorialMode && !isJitInputMode && !isJitLoading) {
+    requestAnimationFrame(() => focusTrap.focus());
+}", 10 results. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\gemini.md, c:\nbs\abible\jit\sensitivity.js, c:\nbs\abible\keyboard.js
+Replacing 6 lines with 6 lines in app.js
 ```
 ```
 ```
 ```
-```
-```
-Checked config.js, db.js, no problems found
-Schema patches applied cleanly. No lint errors.
-Diff Summary
-config.js (/c:/nbs/abible/config.js)
-**
-DB_VERSION (c:\nbs\abible\config.js:2)
-bumped 7 → 8** (your previous v7 upgrade handler did not contain the new stores; bumping triggers a fresh
-onupgradeneeded (c:\BCI\VSCode-win32-x64-1.116.0\560a9dba96\resources\app\extensions\node_modules\typescript\lib\lib.dom.d.ts:22465)
-to create them).
-Four new exports alongside the existing store constants:
-```
-export const API_KEYS_STORE = "apiKeys";
-export const STUDYPLANS_STORE = "studyPlans";
-export const PLAN_CACHE_SOFT_CAP = 100;
-export const SCHEMA_VERSION = "v1";
-```
-db.js (/c:/nbs/abible/db.js)
-Import line extended to include
-API_KEYS_STORE (c:\nbs\abible\config.js:7)
+Checked app.js, no problems found
+Both edits applied to
+app.js (/c:/nbs/abible/app.js)
+. No lint errors.
+Import line now pulls
+isJitInputMode (c:\nbs\abible\keyboard.js:107)
 and
-STUDYPLANS_STORE (c:\nbs\abible\config.js:8)
+isJitLoading (c:\nbs\abible\keyboard.js:106)
+as live bindings from
+keyboard.js (/c:/nbs/abible/keyboard.js)
 .
-**
-onupgradeneeded (c:\BCI\VSCode-win32-x64-1.116.0\560a9dba96\resources\app\extensions\node_modules\typescript\lib\lib.dom.d.ts:22465)
-handler** restructured so the existing logic is preserved verbatim (TEXT bulldoze, conditional create of NOTES/BOOKMARKS/COMMENTARY) and the new v8 block appends:
+focusTrap (c:\nbs\abible\app.js:116)
+blur listener guard extended with
+!isJitInputMode && !isJitLoading (c:\nbs\abible\keyboard.js:106)
+.
+Focus reclaim will now correctly stand down during JIT topic capture and during orchestrator in-flight states.
+
+patch B
+Searched codebase for "hRole: Senior Systems Architect
+Context: We need to implement the B1 "Idempotent Listener" pattern to prevent multiple handlers from stacking on the searchInputEl.
+Please perform these targeted refactors in keyboard.js:
+Listener Management:
+At the top of the file (near state declarations), add:
+let activeInputHandler = null;
+Update clearAllModes():
+At the start of clearAllModes(), add:
+if (activeInputHandler && searchInputEl) {
+    searchInputEl.removeEventListener('keydown', activeInputHandler);
+    activeInputHandler = null;
+}
+Refactor Case 'G':
+Replace the existing 'case G' block with a version that tracks its listener and uses a 10ms setTimeout for searchInputEl.focus(). Ensure the jitInputHandler removes itself and sets activeInputHandler to null on both 'Enter' and 'Escape'.", 22 results. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\gemini.md, c:\nbs\abible\gemini.md, c:\nbs\abible\gemini.md, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js
+Thinking: I need to trace where `searchInputEl` is coming from — it's imported in `keyboard.js` from `app.js`, so it should be available at the module scope when `clearAllModes` is defined.
+Replacing 46 lines with 65 lines in keyboard.js
+```
+```
+```
+```
+Checked keyboard.js, no problems found
+B1 idempotent listener pattern applied to
+keyboard.js (/c:/nbs/abible/keyboard.js)
+. No lint errors.
+Edits:
+Module-level `let activeInputHandler = null;` declared with the JIT state block.
+clearAllModes() (c:\nbs\abible\keyboard.js:118)
+now detaches
+activeInputHandler (c:\nbs\abible\keyboard.js:116)
+from
+searchInputEl (c:\nbs\abible\app.js:35)
+(if present) before flipping any flags — guarantees no stale listener can fire after mode handoff.
+`case 'G'` updated:
 -
-API_KEYS_STORE (c:\nbs\abible\config.js:7)
-— created with
-keyPath: "provider" (c:\nbs\abible\db.js:37)
-(single record per provider).
-STUDYPLANS_STORE (c:\nbs\abible\config.js:8)
-— created with
-keyPath: "cacheKey" (c:\nbs\abible\db.js:37)
-and a lastAccessed index for LRU eviction.
-Both new stores use the same
-if (!contains) (c:\nbs\abible\db.js:34)
-guard pattern as the annotation stores, which means they will not be touched on any future DB version bump. Only
-TEXT_STORE (c:\nbs\abible\config.js:3)
-is destroyed-and-recreated; everything else survives indefinitely.
-Preservation Guarantee — Verified
-The store-preservation contract is now:
-Store On upgrade
-TEXT_STORE (c:\nbs\abible\config.js:3)
-| Wiped and recreated every upgrade (intentional — forces scripture refresh) |
-|
-NOTES_STORE (c:\nbs\abible\config.js:4)
-| Preserved |
-|
-BOOKMARKS_STORE (c:\nbs\abible\config.js:5)
-| Preserved |
-|
-COMMENTARY_STORE (c:\nbs\abible\config.js:6)
-| Preserved |
-|
-API_KEYS_STORE (c:\nbs\abible\config.js:7)
-| Preserved |
-|
-STUDYPLANS_STORE (c:\nbs\abible\config.js:8)
-| Preserved |
-User-owned data — annotations, vault, and AI cache — survives all future scripture corrections. Only the canonical text gets refreshed.
-Record Shape Reference (for vault.js and planCache.js to follow)
-`apiKeys`:
-```
-{
-  provider: 'gemini',           // keyPath
-  encryptedKey: '<plaintext for now; ciphertext slot reserved>',
-  keyEnvelope: null,            // future: { algo, iv, salt, ... }
-  redactedDisplay: '••••••a3F2',
-  savedAt: 1714752000000,
-  modelPreference: 'gemini-2.5-flash'
-}
-```
-`studyPlans`:
-```
-{
-  cacheKey: '<slugified composite hash>',  // keyPath
-  topic: 'struggling with anxiety',
-  filter: 'Charles Spurgeon',
-  model: 'gemini-2.5-flash',
-  schemaVersion: 'v1',                     // from SCHEMA_VERSION export
-  manifestId: 'bsb2',
-  plan: { /* full validated plan */ },
-  createdAt: 1714752000000,
-  lastAccessed: 1714752000000              // indexed for LRU sweeps
-}
-```
-Next Step
-You're ready to author the two leaf modules:
-`jit/vault.js` — `getKey(provider)`, `setKey(provider, rawKey)`, `clearKey(provider)`, `redactedDisplay(provider)`. Reads/writes
-API_KEYS_STORE (c:\nbs\abible\config.js:7)
-. Never logs the raw key string.
-`jit/planCache.js` — `buildCacheKey({...})`,
-get(cacheKey) (c:\nbs\abible\keyboard.js:964)
-,
-put(cacheKey, plan, meta) (c:\nbs\abible\app.js:151)
-, evictIfOverCap(). Re-validates plans on read; lazy-evicts asynchronously after a successful read.
-When you're ready to scaffold either or both, say the word.
+setTimeout(() => searchInputEl.focus(), 10) (c:\BCI\VSCode-win32-x64-1.116.0\560a9dba96\resources\app\extensions\node_modules\typescript\lib\lib.dom.d.ts:44123)
+for deferred focus.
+activeInputHandler = jitInputHandler; (c:\nbs\abible\keyboard.js:1313)
+registered before
+addEventListener (c:\BCI\VSCode-win32-x64-1.116.0\560a9dba96\resources\app\extensions\node_modules\typescript\lib\lib.dom.d.ts:41615)
+.
+Both `Enter` and `Escape` branches now null out
+activeInputHandler (c:\nbs\abible\keyboard.js:116)
+immediately after
+removeEventListener (c:\nbs\abible\keyboard.js:123)
+.
+Note for follow-up: the F-mode word-search handler (registered in
+app.js (/c:/nbs/abible/app.js)
+) does not yet route through
+activeInputHandler (c:\nbs\abible\keyboard.js:116)
+. Until it does, a sequence like F → G is safe (G's
+clearAllModes (c:\nbs\abible\keyboard.js:118)
+only knows how to remove handlers it registered itself, but F's handler lives outside this module). If you want full B1 coverage across both modes, the F-mode keydown attachment in
+app.js (/c:/nbs/abible/app.js)
+should also assign through
+activeInputHandler (c:\nbs\abible\keyboard.js:116)
+— say the word and I'll wire that up. For now, the G→F→G sequence that triggered your bug is fully resolved because G's listener is the one being cleaned.
