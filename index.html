@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Accessible Bible v65.1</title>
+    <title>Accessible Bible v68.2</title>
     <script type="importmap">
       {
         "imports": {
@@ -110,6 +110,13 @@
 
         <div id="content-display" aria-hidden="true">
             </div>
+
+        <!-- Study Plan Summary Banner (v69.0) — visible whenever a plan overlay is active. -->
+        <div id="study-summary-banner" aria-hidden="true" style="display: none; position: fixed; top: 0; left: 0; right: 0; padding: 14px 24px; background: var(--accent-color); color: var(--bg-color); font-family: monospace; font-size: 1.1rem; line-height: 1.4; border-bottom: 3px solid var(--text-color); z-index: 1500; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+            <div id="study-summary-topic" style="font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;"></div>
+            <div id="study-summary-progress" style="font-size: 0.95rem; opacity: 0.85; margin-bottom: 6px;"></div>
+            <div id="study-summary-text" style="font-weight: normal;"></div>
+        </div>
 
         <div id="visual-buffer" aria-hidden="true" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: var(--bg-color); color: var(--text-color); border: 3px solid var(--accent-color); padding: 20px 40px; font-size: 2.5rem; font-weight: bold; border-radius: 8px; z-index: 2000; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.5);"></div>
         <div id="visual-hud" aria-hidden="true" style="position: fixed; bottom: 0; width: 100%; padding: 10px; background: var(--bg-color); border-top: 2px solid var(--accent-color); font-family: monospace; font-size: 1.2rem;">

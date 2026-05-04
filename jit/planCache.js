@@ -163,3 +163,50 @@ export async function evictIfOverCap() {
         tx.onerror = () => reject(new Error('planCache eviction failed.'));
     });
 }
+
+/**
+ * Library listing helper (v69.0). Returns every cached record sorted by
+ * lastAccessed DESC. Headless: NO validation here — the Library UI will
+ * lazily re-validate when a plan is actually selected. This keeps the
+ * listing fast even when the cache holds dozens of plans.
+ *
+ * Each entry shape: { cacheKey, plan, meta, savedAt, lastAccessed }
+ */
+export async function getAllSorted() {
+    await whenDbReady();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction([STUDYPLANS_STORE], 'readonly');
+        const idx = tx.objectStore(STUDYPLANS_STORE).index('lastAccessed');
+        // Cursor in 'prev' direction = lastAccessed DESC (newest first).
+        const cursorReq = idx.openCursor(null, 'prev');
+        const out = [];
+        cursorReq.onsuccess = (event) => {
+            const cursor = event.target.result;
+            if (!cursor) return;
+            if (cursor.value && cursor.value.plan) out.push(cursor.value);
+            cursor.continue();
+        };
+        tx.oncomplete = () => resolve(out);
+        tx.onerror = () => reject(new Error('planCache list failed.'));
+    });
+}
+
+/**
+ * Library deletion (v69.1). Removes a single record from the
+ * STUDYPLANS_STORE by cacheKey. Headless: caller (keyboard.js) owns the
+ * TTS announcement and any UI refresh. Resolves silently when the key
+ * does not exist (idempotent).
+ */
+export async function remove(cacheKey) {
+    if (!cacheKey || typeof cacheKey !== 'string') {
+        throw new Error('planCache.remove: cacheKey required.');
+    }
+    await whenDbReady();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction([STUDYPLANS_STORE], 'readwrite');
+        const store = tx.objectStore(STUDYPLANS_STORE);
+        store.delete(cacheKey);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(new Error('planCache delete failed.'));
+    });
+}

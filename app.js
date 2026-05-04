@@ -98,12 +98,54 @@ export function executeBootJump() {
         loadPlanFromCache(hint).then((plan) => {
             if (!plan) {
                 clearActivePlan('cache-miss');
+                hideStudySummaryBanner();
                 return;
             }
             setActivePlan(plan, { cacheKey: hint, manifestId: currentManifest });
+            updateStudySummaryBanner(plan);
             speak(`A study plan is paused: ${plan.topic || 'untitled'}. Press Alt plus J to advance, I for insight, or Escape to dismiss.`);
-        }).catch(() => clearActivePlan('cache-error'));
+        }).catch(() => { clearActivePlan('cache-error'); hideStudySummaryBanner(); });
     }
+}
+
+// =====================================================================
+// Study Summary Banner (v69.0) — persistent visual context for sighted
+// users while a JIT study plan overlay is active.
+// =====================================================================
+
+export function updateStudySummaryBanner(plan, stepIndex = null) {
+    const banner = document.getElementById('study-summary-banner');
+    if (!banner) return;
+    if (!plan) {
+        banner.style.display = 'none';
+        return;
+    }
+    const topicEl = document.getElementById('study-summary-topic');
+    const progressEl = document.getElementById('study-summary-progress');
+    const textEl = document.getElementById('study-summary-text');
+
+    const topicLine = `Study Plan: ${plan.topic || 'Untitled'}`
+        + (plan.flavor ? ` — ${plan.flavor}` : '');
+    if (topicEl) topicEl.textContent = topicLine;
+
+    if (progressEl) {
+        const total = Array.isArray(plan.verses) ? plan.verses.length : 0;
+        if (Number.isFinite(stepIndex) && stepIndex >= 0 && total > 0) {
+            progressEl.textContent = `Step ${stepIndex + 1} of ${total}`;
+        } else if (total > 0) {
+            progressEl.textContent = `${total} verses`;
+        } else {
+            progressEl.textContent = '';
+        }
+    }
+
+    if (textEl) textEl.textContent = plan.summary || '';
+    banner.style.display = 'block';
+}
+
+export function hideStudySummaryBanner() {
+    const banner = document.getElementById('study-summary-banner');
+    if (banner) banner.style.display = 'none';
 }
 
 export function updateVerseIndex(val) { currentVerseIndex = val; }
@@ -353,7 +395,16 @@ export function readCurrentVerse(forceFull = false, customPrefix = null) {
         );
         if (_idx !== -1) {
             ttsPrefix += `Step ${_idx + 1} of ${_plan.verses.length} in study plan. `;
+            // Refresh the persistent banner with the live step index.
+            updateStudySummaryBanner(_plan, _idx);
+        } else {
+            // Plan still active, but we're off-step — keep the banner
+            // visible (so the user knows the plan is paused, not gone)
+            // but drop the step counter.
+            updateStudySummaryBanner(_plan, null);
         }
+    } else {
+        hideStudySummaryBanner();
     }
 
     speak(ttsPrefix + verseObj.text);

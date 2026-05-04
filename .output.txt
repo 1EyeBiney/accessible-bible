@@ -1,90 +1,80 @@
 Searched codebase for "Role: Senior Systems Architect
-Context Update: v68.1 Accessibility Patch Evaluation.
-I have tested the modal and found two critical bugs:
-The Verse Count input is "stuck": Arrow keys do not update the visual value in the input field.
-Submission Mismatch: When I submitted "5", the engine generated a "3" verse plan. It appears the form is submitting an internal index/default rather than the actual value displayed in the input field.
-Required Fixes (v68.2):
-Fix the Input Cycler: Ensure the ArrowUp/ArrowDown keydown handler for `jit-count-input` updates the `value` attribute of the input element directly.
-Source of Truth: In `submitJitModal()`, do NOT use the internal `jitCountIndex` variable to determine the verse count. Instead, read the `value` directly from `jitCountInputEl.value` and parse it to an integer. This guarantees what the user sees is what the system submits.
-Accessible Announcement: When ArrowUp/ArrowDown changes the value, add a `speak()` call to announce the new count (e.g., "5 verses") so the user gets immediate auditory confirmation.
+Context: In the v69.0 implementation, the 'Delete' key handler for the Study Library was missed. We need to add it now as v69.1.
+Objectives:
+planCache.js: Export a new `remove(cacheKey)` function that deletes a record from the STUDYPLANS_STORE.
+keyboard.js (isStudyLibraryMode): Inside the library handler block, add a listener for the 'Delete' key.
+- It must get the cacheKey of the current entry using `studyLibraryEntries[currentMenuIndex].cacheKey`.
+- It must call `planCache.remove(cacheKey)`.
+- It must remove the entry from the local `studyLibraryEntries` array.
+- It must call `speak("Plan deleted.")` and refresh the `renderMenuVisuals`.
+- If the list is now empty, it should call `clearAllModes()` and return to the engine.
 Action Required:
-Please review the logic in keyboard.js. I need the surgical diffs to:
-Force the arrow-key listener to sync the input.value with the cycle logic.
-Rewrite `submitJitModal()` to pull the verseCount directly from the DOM input value.
-Add the `speak()` confirmation for count changes.", 8 results. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.output.txt, c:\nbs\abible\.output.txt, c:\nbs\abible\app.js, c:\nbs\abible\index.html, c:\nbs\abible\index.html, c:\nbs\abible\keyboard.js
-Thinking: I see the issue now — the handler is updating the input value and calling speak, but the submit handler is still reading from the index array instead of pulling the actual count from the DOM like the user expects. There's also something about a "stuck" state that needs addressing.
-Looking at the event flow, the modal's capture-phase handler with stopPropagation is blocking arrow keys from ever reaching the count input element. Since capture phase fires before the target listener, calling stopPropagation there prevents the event from reaching the input at all. The fix is to be selective about which keys we stop — only Escape and Enter need stopping, while arrow keys should pass through to the input. Actually, since the global handler already guards against acting when in JIT input mode, we don't need the stopPropagation at all.
-Found the root cause: the modal-level capture-phase handler calls
-e.stopPropagation() (c:\nbs\abible\keyboard.js:383)
-on every key. In capture phase, that stops the event before it ever reaches
-jitCountInputEl (c:\nbs\abible\keyboard.js:307)
-, so its ArrowUp/ArrowDown listener never fires — the input is "stuck". Combined with the submit reading from
-jitCountIndex (c:\nbs\abible\keyboard.js:308)
-(which never moved), every submit produced the initial default.
-Fixes for v68.2:
-Replacing 17 lines with 26 lines in keyboard.js
+Provide the surgical diffs for planCache.js and keyboard.js to implement this deletion logic.", 18 results. Files: c:\nbs\abible\.output.txt, c:\nbs\abible\.output.txt, c:\nbs\abible\.output.txt, c:\nbs\abible\.output.txt, c:\nbs\abible\.output.txt, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\db.js, c:\nbs\abible\jit\activePlan.js, c:\nbs\abible\jit\planCache.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js
+Thinking: I'm checking the existing structure in planCache.js to understand how it's organized.
+Read planCache.js, lines 1 to 50
+Searched for regex ^export (async )?function (**/jit/planCache.js), 5 results. Files: c:\nbs\abible\jit\planCache.js, c:\nbs\abible\jit\planCache.js, c:\nbs\abible\jit\planCache.js, c:\nbs\abible\jit\planCache.js, c:\nbs\abible\jit\planCache.js
+Read planCache.js, lines 120 to 175
+Thinking: I'm locating where the getAllSorted function ends so I can insert the remove() method right after it.
+Read planCache.js, lines 175 to 193
+Replacing 5 lines with 25 lines in planCache.js
 ```
 ```
 ```
 ```
-Now the critical fix — drop the blanket
-stopPropagation (c:\nbs\abible\app.js:669)
-on the capture-phase modal handler so events actually reach the count input. The global router already bails on
-isJitInputMode (c:\nbs\abible\app.js:14)
-, so we don't need to block bubbling:
-Replacing 59 lines with 57 lines in keyboard.js
+Now
+keyboard.js (/c:/nbs/abible/keyboard.js)
+— import
+remove (c:\nbs\abible\jit\planCache.js:200)
+and add the Delete handler:
+Replacing 1 lines with 1 lines in keyboard.js
 ```
 ```
 ```
 ```
-Finally, make
-submitJitModal (c:\nbs\abible\keyboard.js:339)
-'s reader read straight from the DOM as the source of truth:
-Replacing 5 lines with 10 lines in keyboard.js
+Add Delete handler inside the Study Library block. Place it after the ArrowUp/Down branch and before Enter:
+Replacing 13 lines with 43 lines in keyboard.js
 ```
 ```
 ```
 ```
-Checked keyboard.js, no problems found
-v68.2 patch complete. Three surgical fixes, one root-cause:
-Root cause — the v68.1 modal-level handler was bound in capture phase and called
-e.stopPropagation() (c:\nbs\abible\app.js:581)
-unconditionally. In capture, that halts the event before it reaches the target, so the count input's keydown listener never fired for ArrowUp/ArrowDown. Compounded by
-submitJitModal (c:\nbs\abible\keyboard.js:339)
-reading
-JIT_VERSE_COUNTS[jitCountIndex] (c:\nbs\abible\keyboard.js:300)
-(the internal cursor that never moved), every submit shipped the boot value 5 — and after a stale state from a prior session, 3.
+Checked keyboard.js, planCache.js, no problems found
+v69.1 deletion logic in place.
+**
+planCache.js (/c:/nbs/abible/jit/planCache.js)
+** — Added
+export async function remove(cacheKey) (c:\nbs\abible\jit\planCache.js:57)
+: validates key, awaits
+whenDbReady() (c:\nbs\abible\jit\planCache.js:20)
+, opens a readwrite tx on
+STUDYPLANS_STORE (c:\nbs\abible\jit\planCache.js:21)
+, calls
+store.delete(cacheKey) (c:\nbs\abible\jit\planCache.js:207)
+. Idempotent (silent on missing key); headless (no TTS).
 **
 keyboard.js (/c:/nbs/abible/keyboard.js)
-— Fix #1: Pass-through capture handler.** Removed the blanket
-e.stopPropagation() (c:\nbs\abible\app.js:581)
-. The modal-level handler now only consumes Escape (always) and Enter (when target is not the count input). Tab, Arrows, and characters pass through to native focus traversal and inner listeners. Safe because
-handleInput (c:\nbs\abible\app.js:14)
-already short-circuits on
-isJitInputMode (c:\nbs\abible\app.js:14)
-, so nothing leaks to the global router regardless.
-**
-keyboard.js (/c:/nbs/abible/keyboard.js)
-— Fix #2: DOM is source of truth.**
-jitModalSubmitHandler (c:\nbs\abible\keyboard.js:309)
-now reads
-parseInt(jitCountInputEl.value, 10) (c:\nbs\abible\app.js:83)
-directly and validates against
-JIT_VERSE_COUNTS.includes(rawCount) (c:\nbs\abible\keyboard.js:300)
-. Falls back to default only on unparseable/illegal values. The internal
-jitCountIndex (c:\nbs\abible\keyboard.js:308)
-is now strictly a UI cursor, never a submission source.
-keyboard.js::setJitCount — Fix #3: Belt-and-suspenders DOM sync.
-setJitCount (c:\nbs\abible\keyboard.js:323)
-now writes both
-inputEl.value (c:\nbs\abible\app.js:400)
-(live property) and
-inputEl.setAttribute('value', ...) (c:\nbs\abible\app.js:400)
-(rendered attribute). Most browsers reflect
-.value (c:\nbs\abible\app.js:400)
-to the visible field on type=text, but the explicit
-setAttribute (c:\nbs\abible\keyboard.js:331)
-guarantees parity for any screen reader or extension that re-reads the attribute.
-Announcement — already present from v68.1: each Arrow press calls
-speak( (c:\nbs\abible\app.js:7)
-${JIT_VERSE_COUNTS[jitCountIndex]} verses.). With Fix #1 unblocking the listener, the user now actually hears it.
+**:
+Import:
+remove as removeCachedPlan (c:\nbs\abible\jit\planCache.js:200)
+added alongside
+getAllCachedPlans (c:\nbs\abible\keyboard.js:27)
+from
+planCache.js (/c:/nbs/abible/jit/planCache.js)
+.
+New `Delete` branch inside the
+isStudyLibraryMode (c:\nbs\abible\keyboard.js:120)
+handler (between ArrowUp/Down and Enter):
+Captures
+victim = studyLibraryEntries[currentMenuIndex] (c:\nbs\abible\keyboard.js:1218)
+; aborts gracefully if missing.
+Optimistic local splice, then fire-and-forget
+removeCachedPlan(victim.cacheKey) (c:\nbs\abible\keyboard.js:27)
+(warns to console on failure but doesn't roll back UI).
+Empty-list path: speaks confirmation including the deleted plan label, calls
+clearAllModes() (c:\nbs\abible\keyboard.js:132)
+, returns.
+Non-empty path: clamps
+currentMenuIndex (c:\nbs\abible\keyboard.js:112)
+to new bounds, re-renders the menu, speaks
+"Plan deleted. N of M: <next entry>" (c:\nbs\abible\keyboard.js:316)
+.
+No errors in either file.

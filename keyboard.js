@@ -12,7 +12,8 @@ import {
     updateTutorialChapter, playTutorialChapter, getKeyboardExplorerDescription, navigateBookmarks,
     toggleCurrentBookmark, parseLinkTarget, isWelcomeMode, isTutorialMode, setWelcomeMode, setTutorialMode,
     bootOptions, bootPreference, cycleBootPreference, copyToClipboard, resetBookmarkJumps,
-    activeMenu, activeReadMode, libraryOptions, setActiveMenu, setActiveReadMode, closeMenus
+    activeMenu, activeReadMode, libraryOptions, setActiveMenu, setActiveReadMode, closeMenus,
+    updateStudySummaryBanner, hideStudySummaryBanner
 } from './app.js';
 import { 
     memoryCache, db, bookmarksCache, loadToMemory 
@@ -23,6 +24,7 @@ import {
 import { startAutoPlay, pauseAutoPlay, stopAutoPlay, isAutoPlaying, autoPlaySettings, curatedVoices, playAutoPlayUI, saveAutoPlaySettings } from './autoplay.js';
 import { helpMenuData, NOTES_STORE, COMMENTARY_STORE, THEMES, muteTutorialPrompt, setMuteTutorialPrompt, DB_NAME } from './config.js';
 import { generateStudyPlan } from './jit/orchestrator.js';
+import { getAllSorted as getAllCachedPlans, remove as removeCachedPlan } from './jit/planCache.js';
 import { getKey, setKey, clearKey, hasKey, redactedDisplay } from './jit/vault.js';
 import {
     getActivePlan, setActivePlan, clearActivePlan,
@@ -115,6 +117,8 @@ export let hasHeardJumpInstructions = false;
 // --- JIT Study Plan State ---
 export let isJitLoading = false;
 export let isJitInputMode = false;
+export let isStudyLibraryMode = false;
+let studyLibraryEntries = [];   // [{ cacheKey, plan, meta, ... }]
 let jitAbortController = null;
 let heartbeatInterval = null;
 let jitTimeoutId = null;
@@ -140,6 +144,8 @@ export function clearAllModes() {
     isVersionMode = false;
     isHelpMode = false; isHelpMenuMode = false; isKeyboardExplorer = false;
     isJitInputMode = false;
+    isStudyLibraryMode = false;
+    studyLibraryEntries = [];
     // Defensive: if the JIT modal is open when another mode forces a
     // mode-clear (e.g. mid-prompt translation switch), tear it down.
     const jitModal = document.getElementById('jit-modal');
@@ -246,6 +252,7 @@ export async function triggerJitStudyPlan(topic, filter = '', verseCount = 5) {
 
         // Third Track: install plan as RAM-resident overlay. No DB writes.
         setActivePlan(plan, { cacheKey, manifestId });
+        updateStudySummaryBanner(plan, 0);
 
         // Push current location to history so Backspace reverses out of
         // the plan, then jump to step 0 and announce summary.
@@ -291,6 +298,7 @@ export function abortActiveJit(reason) {
         catch (_) { try { jitAbortController.abort(); } catch (_) {} }
     }
     clearActivePlan(reason || 'external');
+    hideStudySummaryBanner();
 }
 
 // =====================================================================
@@ -299,6 +307,23 @@ export function abortActiveJit(reason) {
 
 const JIT_VERSE_COUNTS = [3, 4, 5, 6, 7, 8, 9, 10, 15];
 const JIT_DEFAULT_COUNT = 5;
+
+/**
+ * Library entry label (v69.0). Renders Topic / Filter / Count for the
+ * Shift+G recall menu. Both the visual list and the TTS announcement
+ * use this same string so sighted and blind users hear/see identically.
+ */
+function formatLibraryEntry(entry) {
+    if (!entry || !entry.plan) return 'Empty entry';
+    const plan = entry.plan;
+    const topic = plan.topic || (entry.meta && entry.meta.topic) || 'Untitled';
+    const filter = plan.flavor || (entry.meta && entry.meta.filter) || '';
+    const count = Number.isFinite(plan.actual_verse_count)
+        ? plan.actual_verse_count
+        : (Array.isArray(plan.verses) ? plan.verses.length : 0);
+    const filterPart = filter ? `, filter ${filter}` : '';
+    return `${topic} (${count} verses${filterPart})`;
+}
 
 let jitModalEl = null;
 let jitModalFormEl = null;
@@ -663,7 +688,8 @@ export function handleInput(event) {
                        (typeof isAutoPlayMenuMode !== 'undefined' && isAutoPlayMenuMode) ||
                        (typeof isOptionsMenuMode !== 'undefined' && isOptionsMenuMode) ||
                        (typeof isVaultInputMode !== 'undefined' && isVaultInputMode) ||
-                       (typeof isLibraryMode !== 'undefined' && isLibraryMode);
+                       (typeof isLibraryMode !== 'undefined' && isLibraryMode) ||
+                       (typeof isStudyLibraryMode !== 'undefined' && isStudyLibraryMode);
 
     if (isHelpMenuMode) {
         event.preventDefault();
@@ -1161,6 +1187,111 @@ export function handleInput(event) {
         return;
     }
 
+    if (isStudyLibraryMode) {
+        event.preventDefault();
+
+        if (key === 'Escape') {
+            isStudyLibraryMode = false;
+            studyLibraryEntries = [];
+            currentMenuIndex = 0;
+            currentMenuTitle = "";
+            clearVisualBuffer();
+            speak("Study library closed.");
+            return;
+        }
+
+        if (studyLibraryEntries.length === 0) return;
+
+        if (key === 'ArrowDown' || key === 'ArrowUp') {
+            const len = studyLibraryEntries.length;
+            currentMenuIndex = key === 'ArrowDown'
+                ? (currentMenuIndex + 1) % len
+                : (currentMenuIndex - 1 + len) % len;
+            const entry = studyLibraryEntries[currentMenuIndex];
+            const labels = studyLibraryEntries.map(e => formatLibraryEntry(e));
+            renderMenuVisuals(currentMenuTitle, labels, currentMenuIndex);
+            speak(`${currentMenuIndex + 1} of ${len}: ${formatLibraryEntry(entry)}`);
+            return;
+        }
+
+        if (key === 'Delete') {
+            const victim = studyLibraryEntries[currentMenuIndex];
+            if (!victim || !victim.cacheKey) {
+                speak("Cannot delete this entry.");
+                return;
+            }
+            const victimLabel = formatLibraryEntry(victim);
+            // Optimistic UI: drop locally, then fire-and-forget the DB delete.
+            studyLibraryEntries.splice(currentMenuIndex, 1);
+            removeCachedPlan(victim.cacheKey).catch(err => {
+                console.warn('[StudyLibrary] delete failed:', err?.message || err);
+            });
+
+            if (studyLibraryEntries.length === 0) {
+                speak(`${victimLabel} deleted. Study library is now empty.`);
+                clearAllModes();
+                return;
+            }
+
+            // Clamp index to new bounds.
+            if (currentMenuIndex >= studyLibraryEntries.length) {
+                currentMenuIndex = studyLibraryEntries.length - 1;
+            }
+            const labels = studyLibraryEntries.map(e => formatLibraryEntry(e));
+            renderMenuVisuals(currentMenuTitle, labels, currentMenuIndex);
+            const next = studyLibraryEntries[currentMenuIndex];
+            speak(`Plan deleted. ${currentMenuIndex + 1} of ${studyLibraryEntries.length}: ${formatLibraryEntry(next)}`);
+            return;
+        }
+
+        if (key === 'Enter') {
+            const entry = studyLibraryEntries[currentMenuIndex];
+            if (!entry || !entry.plan || !Array.isArray(entry.plan.verses) || entry.plan.verses.length === 0) {
+                speak("This plan is empty or invalid.");
+                return;
+            }
+            // Sanity: there must be an active verse to anchor the back-stack.
+            if (memoryCache[currentVerseIndex]?.id == null) {
+                speak("Cannot load study plan: no active verse.");
+                return;
+            }
+
+            const plan = entry.plan;
+            const manifestId = (entry.meta && entry.meta.manifestId)
+                || localStorage.getItem('currentBibleFile')
+                || 'default';
+
+            // Tear down the menu BEFORE setting the plan, so the
+            // readCurrentVerse triggered by jumpTo() sees a clean state.
+            isStudyLibraryMode = false;
+            studyLibraryEntries = [];
+            currentMenuIndex = 0;
+            currentMenuTitle = "";
+            clearVisualBuffer();
+
+            setActivePlan(plan, { cacheKey: entry.cacheKey, manifestId });
+            updateStudySummaryBanner(plan, 0);
+
+            navigationHistory.push(currentVerseIndex);
+            const firstStep = getCurrentStepVerse();
+
+            // Blind-first announcement: summary, then first-step coordinates.
+            const total = plan.verses.length;
+            const summaryLine = plan.summary || `Study plan on ${plan.topic || 'untitled'}.`;
+            const coordLine = firstStep
+                ? `Jumping to step 1 of ${total}: ${firstStep.book_name} ${firstStep.chapter}, verse ${firstStep.verse}.`
+                : `Plan loaded with ${total} verses.`;
+            speak(`${summaryLine} ${coordLine}`);
+
+            if (firstStep) {
+                jumpTo(firstStep.book_name, firstStep.chapter, firstStep.verse);
+            }
+            return;
+        }
+
+        return;
+    }
+
     if (key === 'Escape') {
         // Third Track exit gesture: if no input/menu mode is active and
         // a study plan overlay is live, Escape exits the plan. Input
@@ -1176,6 +1307,7 @@ export function handleInput(event) {
         if (!anyInputMode && getActivePlan()) {
             event.preventDefault();
             clearActivePlan('user-exit');
+            hideStudySummaryBanner();
             speak("Exiting study plan.");
             return;
         }
@@ -1253,6 +1385,28 @@ export function handleInput(event) {
     // --- Tab: 'Where Am I?' ---
     if (key === 'Tab') {
         event.preventDefault();
+        // Active study plan takes precedence: announce the plan summary
+        // and current step progress before falling through to the
+        // standard verse coordinates.
+        const _activePlan = getActivePlan();
+        if (_activePlan && Array.isArray(_activePlan.verses) && memoryCache[currentVerseIndex]) {
+            const cur = memoryCache[currentVerseIndex];
+            const bn = (cur.book_name || '').toLowerCase();
+            const idx = _activePlan.verses.findIndex(v =>
+                (v.book_name || '').toLowerCase() === bn &&
+                v.chapter === cur.chapter &&
+                v.verse === cur.verse
+            );
+            const total = _activePlan.verses.length;
+            const topic = _activePlan.topic || 'untitled';
+            const summary = _activePlan.summary || '';
+            const progress = idx >= 0
+                ? `Currently on step ${idx + 1} of ${total}.`
+                : `Plan paused; you have stepped off-curriculum. ${total} steps total.`;
+            const coords = `${cur.book_name} chapter ${cur.chapter}, verse ${cur.verse}.`;
+            speak(`Study plan: ${topic}. ${summary} ${progress} ${coords}`);
+            return;
+        }
         if (activeReadMode === 'book' && memoryCache.length > 0) {
             const pct = Math.round(((currentVerseIndex + 1) / memoryCache.length) * 100);
             const currentChap = memoryCache[currentVerseIndex].chapter;
@@ -1618,6 +1772,38 @@ export function handleInput(event) {
         case 'G': {
             event.preventDefault();
             if (!isReady) break;
+
+            // Shift+G — Study Library: recall a previously-cached plan.
+            if (event.shiftKey) {
+                clearAllModes();
+                speak("Loading study library.");
+                (async () => {
+                    let entries = [];
+                    try {
+                        entries = await getAllCachedPlans();
+                    } catch (err) {
+                        console.warn('[StudyLibrary] list failed:', err?.message || err);
+                        speak("Could not open the study library.");
+                        return;
+                    }
+                    if (!entries || entries.length === 0) {
+                        speak("Study library is empty. Press G to generate a new plan.");
+                        return;
+                    }
+                    studyLibraryEntries = entries;
+                    isStudyLibraryMode = true;
+                    currentMenuIndex = 0;
+                    currentMenuTitle = "STUDY LIBRARY";
+                    const labels = studyLibraryEntries.map(e => formatLibraryEntry(e));
+                    renderMenuVisuals(currentMenuTitle, labels, currentMenuIndex);
+                    speak(`Study Library. ${entries.length} cached plan${entries.length === 1 ? '' : 's'}, sorted newest first. ` +
+                          `1 of ${entries.length}: ${formatLibraryEntry(entries[0])}. ` +
+                          `Up and down arrows to navigate. Enter to load. Escape to close.`);
+                })();
+                break;
+            }
+
+            // Plain G — open the generation modal.
             clearAllModes();
             speak("Study plan. Topic, filter, and verse count. Tab between fields. Press Enter to generate. Escape to cancel.");
             openJitModal();
