@@ -205,6 +205,15 @@ export async function triggerJitStudyPlan(topic, filter = '') {
         return;
     }
 
+    // Capture the verse the user pressed G on. The plan's Master Note
+    // is anchored here regardless of any navigation that happens during
+    // the 30s generation window.
+    const startingNoteId = memoryCache[currentVerseIndex]?.id;
+    if (startingNoteId == null) {
+        speak("Cannot start study plan: no active verse.");
+        return;
+    }
+
     enterJitLoadingState();
 
     // Hard 30-second timeout — separate from user cancellation.
@@ -227,12 +236,11 @@ export async function triggerJitStudyPlan(topic, filter = '') {
         // Distinct completion tone — slightly higher than heartbeat, brief.
         playTone(880, 'sine', 0.15, 0.25);
 
-        const title = (plan && plan.title) ? plan.title : 'Untitled plan';
-        const description = (plan && plan.description) ? plan.description : '';
-        speak(`Plan ready. ${title}. ${description}`);
+        // Persist the plan into NOTES_STORE (Master Note at startingNoteId)
+        // and COMMENTARY_STORE (per-node, keyed by curriculum integer ID).
+        await persistJitPlanToStudyArtifacts(plan, startingNoteId);
 
-        // Hand-off to the auto-play engine occurs in Cycle 3.
-        // For now, the validated plan is announced and discarded.
+        speak("Study plan saved. Use Alt+J in your notes to navigate steps and Y to hear the commentary.");
     } catch (err) {
         let safe;
         if (isStudyPlanError(err)) {
@@ -257,6 +265,70 @@ export async function triggerJitStudyPlan(topic, filter = '') {
     } finally {
         exitJitLoadingState();
     }
+}
+
+/**
+ * R-5 Database Injection: persist a validated study plan into the
+ * existing notes + commentary stores so the user can navigate steps
+ * via Alt+J (Omni-Jump) and hear per-verse commentary via Y.
+ *
+ * Master Note format (Option A — parser-compatible):
+ *   Step N: [[Book Chapter:Verse]]
+ *
+ * Both stores are written in a single readwrite transaction. Existing
+ * note/commentary content is preserved; new content is appended below
+ * a "--- AI Study Guide ---" separator.
+ */
+function persistJitPlanToStudyArtifacts(plan, startingNoteId) {
+    return new Promise((resolve, reject) => {
+        if (!db) return reject(new Error('DB unavailable'));
+
+        const stepLines = (plan.nodes || []).map((n, i) => {
+            const step = n.step || (i + 1);
+            return `Step ${step}: [[${n.book_name} ${n.chapter}:${n.verse}]]`;
+        }).join('\n');
+
+        const reflectionBlock = plan.closing_reflection
+            ? `\n\nClosing reflection: ${plan.closing_reflection}`
+            : '';
+        const masterNoteBody = `Study Plan: ${plan.plan_title || 'Untitled plan'}\n\n` +
+                              `${plan.plan_description || ''}\n\nSteps:\n${stepLines}${reflectionBlock}`;
+
+        const tx = db.transaction([NOTES_STORE, COMMENTARY_STORE], 'readwrite');
+        const notes = tx.objectStore(NOTES_STORE);
+        const comms = tx.objectStore(COMMENTARY_STORE);
+
+        // 1. Non-destructive Master Note injection at the starting verse.
+        const noteReadReq = notes.get(startingNoteId);
+        noteReadReq.onsuccess = () => {
+            const existing = noteReadReq.result?.content || '';
+            const merged = existing
+                ? `${existing}\n\n--- AI Study Guide ---\n${masterNoteBody}`
+                : masterNoteBody;
+            notes.put({ note_id: startingNoteId, content: merged });
+        };
+
+        // 2. Per-node commentary upserts keyed by curriculum integer ID.
+        (plan.nodes || []).forEach((node) => {
+            const verseMatch = memoryCache.find(v =>
+                v.book_name?.toLowerCase() === node.book_name?.toLowerCase() &&
+                v.chapter === node.chapter && v.verse === node.verse
+            );
+            if (!verseMatch) return;
+            const curriculumId = (verseMatch.book_number * 1000000) + (verseMatch.chapter * 1000) + verseMatch.verse;
+            const commReq = comms.get(curriculumId);
+            commReq.onsuccess = () => {
+                const existing = commReq.result?.content || '';
+                const merged = existing
+                    ? `${existing}\n\n--- AI Study Guide ---\n${node.commentary_text}`
+                    : node.commentary_text;
+                comms.put({ id: curriculumId, content: merged });
+            };
+        });
+
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+    });
 }
 
 // =====================================================================
