@@ -109,17 +109,19 @@ export function executeBootJump() {
 }
 
 // =====================================================================
-// Study Summary Banner (v69.0) — persistent visual context for sighted
-// users while a JIT study plan overlay is active.
+// Study Summary Banner (v69.0) — BANNER SUPPRESSED in v71.0.
+// Summary is now displayed inline in the Study Library visual buffer
+// (renderStudyLibrary) so it no longer obscures Bible text. These
+// functions remain callable from all existing sites; they keep DOM
+// fields in sync for the Tab-key status path but never show the banner.
 // =====================================================================
 
 export function updateStudySummaryBanner(plan, stepIndex = null) {
     const banner = document.getElementById('study-summary-banner');
     if (!banner) return;
-    if (!plan) {
-        banner.style.display = 'none';
-        return;
-    }
+    // Always hidden: summary lives in the Study Library menu (Shift+G).
+    banner.style.display = 'none';
+    if (!plan) return;
     const topicEl = document.getElementById('study-summary-topic');
     const progressEl = document.getElementById('study-summary-progress');
     const textEl = document.getElementById('study-summary-text');
@@ -140,7 +142,6 @@ export function updateStudySummaryBanner(plan, stepIndex = null) {
     }
 
     if (textEl) textEl.textContent = plan.summary || '';
-    banner.style.display = 'block';
 }
 
 export function hideStudySummaryBanner() {

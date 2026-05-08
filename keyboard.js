@@ -50,7 +50,7 @@ export function updateVisualBuffer(modeText, valueText) {
     }
 }
 
-export function renderMenuVisuals(title, items, currentIndex) {
+export function renderMenuVisuals(title, items, currentIndex, subtitle = '') {
     const visualBuffer = document.getElementById('visual-buffer');
     if (!visualBuffer) return;
     visualBuffer.style.display = 'block';
@@ -59,6 +59,9 @@ export function renderMenuVisuals(title, items, currentIndex) {
 
     let html = `<div style="text-transform: uppercase; letter-spacing: 2px;">${title}</div>`;
     html += `<hr style="border-color: var(--accent-color); margin: 15px 0;">`;
+    if (subtitle) {
+        html += `<div aria-hidden="true" style="font-size: 1.2rem; opacity: 0.9; font-style: italic; border-left: 3px solid var(--accent-color); padding-left: 10px; margin-bottom: 15px;">${subtitle}</div>`;
+    }
     html += `<ul style="list-style: none; padding: 0; text-align: left; font-size: 1.8rem; line-height: 1.4;">`;
 
     items.forEach((item, index) => {
@@ -384,7 +387,11 @@ function describeSortMode(mode, viewLen, totalLen) {
 
 function renderStudyLibrary() {
     const labels = studyLibrarySortedView.map(e => formatLibraryEntry(e, { visual: true }));
-    renderMenuVisuals(currentMenuTitle, labels, currentMenuIndex);
+    // Pass the focused entry's summary as a subtitle — visible only to sighted
+    // users via the visual buffer (aria-hidden). Screen readers receive the
+    // summary via speak() at plan-load time and via Tab, not this DOM path.
+    const summary = studyLibrarySortedView[currentMenuIndex]?.plan?.summary || '';
+    renderMenuVisuals(currentMenuTitle, labels, currentMenuIndex, summary);
 }
 
 let jitModalEl = null;

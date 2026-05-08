@@ -1,110 +1,78 @@
-Searched codebase for "Role: Senior Systems Architect
-Context: We are beginning work on v70.0. Our primary objective for this cycle is to fix a critical visual accessibility gap for sighted users regarding the Options Menu and Vault Input, without compromising our screen-reader-first architecture. 
-The Problem:
-Currently, when a user accesses the Options menu to save their Gemini API key, the system enters isVaultInputMode and routes focus to an sr-only input element. To a sighted user (e.g., a helper or instructor), the screen appears frozen with no visual indication of what to do or what is being typed. Additionally, the standard #visual-buffer menus lack contrast against the background Bible text, making them hard to read.
-Proposed Solutions for Evaluation:
-Visual Menu Backdrop: Add a semi-transparent fullscreen backdrop (e.g., `rgba(0, 0, 0, 0.85)`) behind the `#visual-buffer` whenever a menu or input mode is active, dimming the app behind it.
-Vault Input Visibility: 
-- Option A: When `isVaultInputMode` is active, display a clear visual prompt ("PASTE GEMINI API KEY HERE") in the visual buffer, and mirror the typed keystrokes as a masked string (e.g., ••••••••) so the user sees their input.
-- Option B: Temporarily strip the `sr-only` class from the actual input element, style it to be large and centered over the backdrop, and reapply `sr-only` when the mode clears.
-Task:
-Evaluate the Proposed Solutions: As the Systems Architect, review Options A and B against our project invariants (especially Invariant 'a' and 'j'). Which approach is more robust for our DOM state and accessibility goals? 
-Propose Improvements: Are there better ways to handle this hybrid visual/auditory state?
-Provide the v70.0 Blueprint: Once you have determined the best architectural path, provide the surgical diffs required for `keyboard.js`, `ui.js` (if applicable), and `index.html`/CSS to implement the Menu Backdrop and the Vault Input visibility.
-Constraints:
-Maintain all existing screen reader announcements and audio cues perfectly. 
-Do NOT rewrite entire files. Provide only the surgical diffs.
-Do not lose the recent v69.4.1 heartbeat audio changes in keyboard.js.", no results
-Thinking: Let me start by reading the relevant files to understand the current implementation before proposing any architectural changes.
-Read keyboard.js, lines 1 to 80
-Read ui.js
-Read index.html, lines 1 to 80
-Thinking: Let me read more of the HTML file and the keyboard.js file to understand the existing structure better, especially around the vault input mode and visual buffer.
-Read index.html, lines 80 to 187
-Read keyboard.js, lines 80 to 250
-Thinking: Let me read more of keyboard.js to find the vault input mode handling:
-Searched for regex isVaultInputMode|vaultInput|vault.*input|api.*key.*input|paste.*key (**/keyboard.js), 12 results. Files: c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js
-Searched for regex visual-backdrop|menu-backdrop|backdrop (**/index.html), no results
-Read keyboard.js, lines 1170 to 1240
-Thinking: Now I have a clear picture of the architecture. Let me analyze the architectural decision before proposing a solution.
-**Current state:**
-1. `#visual-buffer` is a centered overlay (z-index: 2000) showing menus and mode prompts
-2. When `isVaultInputMode` is active, the `searchInputEl` (an `sr-only` input) gets focus and keyboard events
-3. The `#visual-buffer` shows whatever text is rendered via `updateVisualBuffer()` / `renderMenuVisuals()`
-4. There is no backdrop behind `#visual-buffer` — so the Bible text bleeds through, creating contrast issues
-5. The core issues are that vault input menus lack contrast and sighted users get no visual feedback while typing
-Option B of stripping and reapplying the sr-only class is risky — it could cause the screen reader to re-announce the input, shift the cursor position, or interfere with JAWS since the input is exported as an ES module.
-Option A is cleaner: I'll mirror the keystrokes as a masked string in the visual buffer without touching the sr-only element, keeping the screen reader focused on the hidden input while showing sighted users a growing sequence of dots as they type.
-For the mask itself, instead of manually tracking each keystroke (which breaks on paste and multi-key deletions), I'll listen to the `input` event and derive the mask length directly from `searchInputEl.value.length` — this handles all edge cases automatically.
-For the menu backdrop, I'm adding a fixed overlay div with a dark semi-transparent background positioned behind the menu.
-Now I need to wire it all together: add the backdrop HTML and styling, update the visual buffer functions to show and hide it in sync with the menu, and hook up the input listener to refresh the mask whenever the search field changes. — nothing replaces it, which is why sighted users see a blank screen. I need to add `updateVisualBuffer` calls in the vault handler right after setting `isVaultInputMode = true`, then set up an input listener to track the masked key as it's being entered. I'll also need to clean up that listener when exiting or canceling. For the backdrop, I should add the element to the HTML, then modify both `updateVisualBuffer` and `renderMenuVisuals` to handle showing and hiding it.
-Now I'm locating the exact line numbers for `updateVisualBuffer` and `renderMenuVisuals` in keyboard.js to make precise edits.
-Now I have everything I need. Let me read the precise line ranges for surgical edits.
-Read keyboard.js, lines 38 to 87
-Thinking: Now I have everything I need. Let me plan the surgical diffs:
-## Architecture Decision
-**Option B (strip/reapply sr-only) — REJECTED.**
-Mutating the `sr-only` sentinel class at runtime races against JAWS/NVDA focus events and violates the focus-trap contract (H-001). The `searchInputEl` is a shared module export — touching its CSS state from inside a transient mode handler is unpredictable.
-**Option A (visual-buffer mirror) — ACCEPTED, with enhanced mask using `input` event.**
-The `vaultInputHandler` only fires on Enter/Escape. For character-by-character visual feedback, we add a second `input` event listener on `searchInputEl` that reads `searchInputEl.value.length` and rerenders the mask. 
-This approach handles paste operations, bulk deletions, and backspace naturally since the input listener responds to the actual DOM value rather than reconstructing from key events. Both listeners get torn down together in the same cleanup routine.
-## Diffs needed:
-### 1. `index.html`: Add `#menu-backdrop` div + CSS rule
-Creating a fixed overlay backdrop with high z-index and semi-transparent black background, positioned before the visual-buffer element in the DOM.
-### 2. `keyboard.js` — `updateVisualBuffer`: show/hide backdrop
-Modifying the function to toggle the backdrop visibility alongside the visual buffer, hiding both when there's no mode text and showing both when displaying menu content.
-### 3. `keyboard.js` — `renderMenuVisuals`: show backdrop
-Updating the menu rendering function...
-### 4. `keyboard.js` — vault input section: add `updateVisualBuffer` prompt + `input` event listener for mask
-Adding prompts to guide the user through the API key input flow, with the initial prompt appearing when vault mode activates and a live mask display updating as the user pastes the key. Still writing the vault handler... Setting up the vault input handler to capture the API key, then cleaning up the event listener and resetting the input state once the user confirms or cancels. I'm cleaning up the input handlers by removing the event listeners and resetting the state variables, then switching back to normal text input mode. Now I need to think through the backdrop implementation — it should be added to the menu rendering function since that handles all menu displays, and I'll set its z-index to 1999 to sit just below the visual buffer at 2000. I'm about to write out the specific CSS and DOM changes needed across the HTML and JavaScript files. Now I'm locating the exact strings to match for the file replacements. I need to find where `#visual-buffer` is defined in the HTML and insert the backdrop CSS before the closing style tag, then add the backdrop DOM element right before the visual-buffer div itself.
-Updating keyboard.js... Updating the menu backdrop visibility...
-Actually, I need to think through the structure more carefully. The `#menu-backdrop` element should be marked as `aria-hidden="true"` since it's purely decorative, and it needs to live outside the `#app-container` so it doesn't get wiped out if there's a catastrophic error that replaces the entire body innerHTML.
-For the z-index stacking, since both `#visual-buffer` and `#menu-backdrop` will use `position: fixed`, they'll establish their own stacking context relative to the viewport, so the DOM nesting doesn't actually matter — I just need to ensure the z-index values are set correctly. I'll place the backdrop right before the visual buffer in the DOM for clarity.
-Now I'm ready to write out the five surgical changes: the CSS rules, the DOM structure in index.html, and the three keyboard.js modifications.
-Now I have full context. Let me deliver the architectural analysis first, then the implementation.
-Architectural Analysis
-Option B — REJECTED
-Stripping and reapplying sr-only at runtime is the wrong pattern here: it creates a timing window where NVDA/JAWS may re-announce the input element mid-password-entry, the focus-trap exclusion list (H-001) depends on the mode flag not DOM class state, and the
-is a shared module export whose CSS sentinel should be immutable at runtime.
-Option A — ACCEPTED, with one enhancement
-The standard input event on
-(not key-by-key reconstruction via keydown) is the correct source for the mask. It naturally handles Ctrl+V paste, Ctrl+A+Delete, and backspace without fragile character counting. The
-already handles Enter/Escape; a separate vaultMaskHandler attached to input mirrors
-as bullet characters into the visual buffer, then is removed in the same cleanup block.
-Additional Improvement — Menu Backdrop
-A #menu-backdrop &lt;div&gt; (position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1999) sits one z-level behind #visual-buffer (z-index: 2000).
-and
-toggle it in sync with the buffer — a single show/hide pair, no new mode flags, no screen-reader surface. Addresses contrast for all menu states simultaneously.
-D-006 footnote
-The heartbeat interval's 220 Hz note was already replaced by the v69.4.1 Lifeboat
-call in your current code — confirmed present, untouched below.
-Now the diffs:
-Replacing 39 lines with 64 lines in index.html, keyboard.js
+Searched codebase for "Role: Expert Developer
+Context: We are executing update v71.0. We need to clean up the JIT Study Plan UI for sighted users. The persistent #study-summary-banner currently covers the Bible text. We are going to visually suppress this banner and move the plan summary into the Study Library menu (Shift + G), without breaking any screen reader audio paths.
+Objectives:
+`app.js` (Neuter the Banner): 
+- Locate the `updateStudySummaryBanner` function.
+- Do NOT delete the function or the DOM text assignments (they are required for the `Tab` key screen reader logic).
+- ONLY remove the line that makes the banner visible (e.g., `banner.style.display = 'block';` or `flex`). Ensure it remains hidden. Add a brief comment noting that visual display is suppressed for v71.0.
+`keyboard.js` (Inject Subtitle):
+- Locate `renderMenuVisuals(title, items, currentIndex)`. Update the signature to accept an optional 4th parameter: `subtitle = ''`.
+- Inside `renderMenuVisuals`, if `subtitle` is truthy, inject a styled `<div>` between the `<hr>` and the `<ul>` (make sure it also has `aria-hidden="true"`). Style it to match the commentary descriptions (e.g., `font-size: 1.2rem; opacity: 0.9; font-style: italic; border-left: 3px solid var(--accent-color); padding-left: 10px; margin-bottom: 15px;`).
+- Locate `renderStudyLibrary()`. Extract the summary from the focused entry (e.g., `const summary = studyLibrarySortedView[currentMenuIndex]?.plan?.summary || '';`). Pass this `summary` as the 4th argument to `renderMenuVisuals`.
+`index.html` (Version Bump):
+- Update the `</ul></div>. Files: c:\nbs\abible\.changelog.md, c:\nbs\abible\.output.txt, c:\nbs\abible\.output.txt, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\index.html, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\project_brief.md
+Thinking: Let me check the current state of the relevant files before making edits, since some changes were already made in the previous session.
+Searched for text updateStudySummaryBanner (**/app.js), 4 results. Files: c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js, c:\nbs\abible\app.js
+Searched for text renderMenuVisuals\|renderStudyLibrary (**/keyboard.js), no results
+Searched for files matching **/.changelog.md, 1 match. Files: c:\nbs\abible\.changelog.md
+Thinking: The grep_search for keyboard.js `renderMenuVisuals|renderStudyLibrary` returned no results - that's likely a regex issue with the pipe. Let me search separately.
+Searched for text renderMenuVisuals (**/keyboard.js), 20 results. Files: c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js
+Read app.js, lines 110 to 165
+Read .changelog.md, lines 1 to 5
+Thinking: Now I can see the current state:
+1. `app.js` - The `updateStudySummaryBanner` function already has the banner suppressed from my previous edit (from the session). The comment says "BANNER SUPPRESSED in v70.1." and already has `banner.style.display = 'none'` hardcoded. The previous session's diff already applied this. So I don't need to change `app.js` again - but the user wants a "v71.0" version. Wait, let me re-read: the user is saying "executing update v71.0" but the changes they are requesting to `app.js` were already made (banner suppressed). The `keyboard.js` `renderStudyLibrary` already has the subtitle injection from the previous session edit.
+2. Looking back at my previous `keyboard.js` changes, I modified `renderStudyLibrary` to inject the focused entry's plan summary as a subtitle below the menu list for sighted users, while screen readers get the summary through the speak() function at entry load time.
+3. The user wants me to refactor this — instead of injecting the subtitle directly in `renderStudyLibrary`, I should pass it as a parameter to `renderMenuVisuals` and let that function handle the DOM manipulation. This is cleaner and keeps concerns separated.
+4. So I need to update `renderMenuVisuals` to accept a `subtitle` parameter, then modify `renderStudyLibrary` to extract the summary and pass it along. The previous approach appended the subtitle directly to the buffer after calling `renderMenuVisuals`, but the user wants a cleaner implementation where the subtitle gets injected into the HTML generation itself. I need to refactor `renderMenuVisuals` to accept an optional subtitle parameter and handle the injection internally, then update `renderStudyLibrary` to pass the summary as the fourth argument instead of doing manual DOM manipulation. For `app.js`, I should verify whether the v70.1 comment needs updating to v71.0 based on what the user specified.
+Read keyboard.js, lines 50 to 420
+Read .changelog.md, lines 1 to 20
+Searched for text &lt;title&gt; (**/index.html), 1 result. Files: c:\nbs\abible\index.html
+Thinking: Now I have the full picture. Let me understand what's already done vs. what needs to be done:
+1. **`app.js`**: The banner suppression was already applied in previous session (v70.1 comment). The banner is already hardcoded to `display: none`. The user wants the comment to say "v71.0" but it currently says "v70.1". I need to update the comment to v71.0.
+2. **`keyboard.js`**: 
+   - `renderMenuVisuals` does NOT have the `subtitle` parameter yet - the previous session took a different approach (appending to DOM after calling `renderMenuVisuals`). 
+   - The user now wants the cleaner approach: update the signature to include `subtitle = ''` and inject HTML inside `renderMenuVisuals`.
+   - `renderStudyLibrary` currently appends the subtitle via DOM manipulation. I need to replace this with the cleaner call: pass `summary` as 4th arg to `renderMenuVisuals`, and remove the manual DOM append.
+3. **`index.html`**: Title currently shows `v70.` (seems incomplete - probably `v70.0`) → update to `v71.0`.
+4. **`.changelog.md`**: Add v71.0 entry at the top.
+Let me plan the diffs:
+### app.js
+Update the banner suppression comment from v70.1 to v71.0.
+### keyboard.js change 1: `renderMenuVisuals` signature + subtitle injection
+I'm modifying the function signature to accept a subtitle parameter with a default empty string, then building the HTML to include the title, a horizontal rule, and the subtitle text below it. Building the menu rendering function... I'm styling the subtitle element with a larger font size and then appending it to the visual buffer so sighted users see the plan summary below the menu.
+Now I'm wrapping up the render function by calling renderMenuVisuals with the formatted labels, current menu index, and summary text.
+Looking at the version updates needed across the files — the title tag shows v70 with what looks like a truncated character, and I need to bump it to v71.0. The banner comment in app.js also references v70.1 and should be updated to v71.0. Then I'll add a new changelog entry at the top documenting these changes.
+Now I have the complete picture. The previous session already applied the banner suppression and a DOM-append approach for the subtitle. The user wants the cleaner subtitle parameter pattern instead. Here are the four surgical diffs:
+Replacing 48 lines with 42 lines in app.js, keyboard.js, index.html, .changelog.md
 ```
 ```
 ```
 ```
 ```
 ```
-All 5 diffs applied. Here's a summary of what changed and why:
+```
+```
+```
+```
+All four files updated. Summary of each change:
 **
-** — 2 changes
-**CSS** (`#menu-backdrop`): `position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1999; display: none`. Sits one z-level below `#visual-buffer` (2000), `aria-hidden`, purely decorative.
-**DOM**: `<div>` inserted immediately before `#visual-buffer`.
-**
-</div>
-** — 3 changes
-**
-**: reads #menu-backdrop and shows/hides it in sync with #visual-buffer. One lookup per call — no module-level reference needed since backdrop is only needed when buffer is needed.
-2. **
-**: same backdrop show on every menu render (covers all menu states: Options, AutoPlay, Library, etc.).
-3. Vault input section: 
-Calls
-immediately on entry — the backdrop fires automatically via the updated
+** — Comment version tag updated from v70.1 → v71.0. No functional change; banner was already hardcoded to
 .
-Adds
-on the input event (handles paste/backspace/Ctrl+V correctly, unlike keydown), rendering •.repeat(length) into the buffer.
-Removes
-in the same cleanup block as
-. No leak.
-All screen reader announcements, audio cues, and the v69.4.1 Lifeboat heartbeat are untouched.
+**
+** — Two changes:
+1.
+signature gains
+as a 4th defaulted parameter. When truthy, a &lt;div aria-hidden=&quot;true&quot;&gt; is injected between the &lt;hr&gt; and the &lt;ul&gt; using the
+string path — no second DOM pass, no
+fragility. All eighteen existing call sites pass only 3 args and are unaffected.
+2.
+collapsed from ~20 lines to 4. The
+extraction feeds directly into the 4th arg; the old
+/
+block is gone.
+**
+** —
+bumped to Accessible Bible v71.0.
+**
+** — [v71.0] entry prepended with Added/Changed/Refactored sections documenting both the banner suppression and the
+signature change.
