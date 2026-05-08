@@ -1,29 +1,110 @@
 Searched codebase for "Role: Senior Systems Architect
-Context: We need to perform a surgical update to our Master Watchdog document (project_brief.md) to reflect the current state of the codebase. We have advanced from v66.1 to v69.4.1, but we are intentionally deferring the Autoplay engine handoff (R-5).
+Context: We are beginning work on v70.0. Our primary objective for this cycle is to fix a critical visual accessibility gap for sighted users regarding the Options Menu and Vault Input, without compromising our screen-reader-first architecture. 
+The Problem:
+Currently, when a user accesses the Options menu to save their Gemini API key, the system enters isVaultInputMode and routes focus to an sr-only input element. To a sighted user (e.g., a helper or instructor), the screen appears frozen with no visual indication of what to do or what is being typed. Additionally, the standard #visual-buffer menus lack contrast against the background Bible text, making them hard to read.
+Proposed Solutions for Evaluation:
+Visual Menu Backdrop: Add a semi-transparent fullscreen backdrop (e.g., `rgba(0, 0, 0, 0.85)`) behind the `#visual-buffer` whenever a menu or input mode is active, dimming the app behind it.
+Vault Input Visibility: 
+- Option A: When `isVaultInputMode` is active, display a clear visual prompt ("PASTE GEMINI API KEY HERE") in the visual buffer, and mirror the typed keystrokes as a masked string (e.g., ••••••••) so the user sees their input.
+- Option B: Temporarily strip the `sr-only` class from the actual input element, style it to be large and centered over the backdrop, and reapply `sr-only` when the mode clears.
 Task:
-Provide a surgical diff to update project_brief.md to version 1.3.
-Required Updates:
-§1 PINNED CONTEXT & §11 CURRENT STATUS:
-- Bump App version to v69.4.1.
-- Bump Brief version to 1.3.
-- Update Last Completed: "v69.2 Study Library (Recent/Alpha/Favorites views, 'K' pinning, LRU eviction protection) and v69.4.1 JIT Audio Heartbeat hotfix (800Hz Lifeboat echo)."
-- Update Active Task: "Visual accessibility overhaul of the Options Menu and Vault Input (v69.5)."
-§12 ROADMAP:
-- Do NOT mark R-5 as complete (it is currently deferred).
-- Insert a new intermediate task before R-6: "[ ] R-5.1 Cycle 2 Detour: Fix visual accessibility gaps in the Options Menu and Vault Input for sighted users."
-§14 SESSION LOG:
-- Prepend a new entry: "S-[Current Date] v69.2 + v69.4.1 shipped: Advanced Library Management implemented with virtual views, first-letter navigation, and pinning immunity. JIT heartbeat upgraded to 800Hz 'Lifeboat' using `playEcho` utility. App bumped to v69.4.1. Brief bumped to 1.3."
+Evaluate the Proposed Solutions: As the Systems Architect, review Options A and B against our project invariants (especially Invariant 'a' and 'j'). Which approach is more robust for our DOM state and accessibility goals? 
+Propose Improvements: Are there better ways to handle this hybrid visual/auditory state?
+Provide the v70.0 Blueprint: Once you have determined the best architectural path, provide the surgical diffs required for `keyboard.js`, `ui.js` (if applicable), and `index.html`/CSS to implement the Menu Backdrop and the Vault Input visibility.
 Constraints:
-Output ONLY the surgical diffs required to update the markdown file.
-Do not modify any rules or invariants.", 9 results. Files: c:\nbs\abible\.changelog_recent.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.changelog.md, c:\nbs\abible\.output.txt, c:\nbs\abible\.rules\jit-feature.md, c:\nbs\abible\gemini.md, c:\nbs\abible\gemini.md, c:\nbs\abible\gemini.md, c:\nbs\abible\project_brief.md
-Thinking: The user wants me to apply surgical edits to project_brief.md. Let me make all 4 changes simultaneously.
-Replacing 14 lines with 16 lines in project_brief.md
+Maintain all existing screen reader announcements and audio cues perfectly. 
+Do NOT rewrite entire files. Provide only the surgical diffs.
+Do not lose the recent v69.4.1 heartbeat audio changes in keyboard.js.", no results
+Thinking: Let me start by reading the relevant files to understand the current implementation before proposing any architectural changes.
+Read keyboard.js, lines 1 to 80
+Read ui.js
+Read index.html, lines 1 to 80
+Thinking: Let me read more of the HTML file and the keyboard.js file to understand the existing structure better, especially around the vault input mode and visual buffer.
+Read index.html, lines 80 to 187
+Read keyboard.js, lines 80 to 250
+Thinking: Let me read more of keyboard.js to find the vault input mode handling:
+Searched for regex isVaultInputMode|vaultInput|vault.*input|api.*key.*input|paste.*key (**/keyboard.js), 12 results. Files: c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js, c:\nbs\abible\keyboard.js
+Searched for regex visual-backdrop|menu-backdrop|backdrop (**/index.html), no results
+Read keyboard.js, lines 1170 to 1240
+Thinking: Now I have a clear picture of the architecture. Let me analyze the architectural decision before proposing a solution.
+**Current state:**
+1. `#visual-buffer` is a centered overlay (z-index: 2000) showing menus and mode prompts
+2. When `isVaultInputMode` is active, the `searchInputEl` (an `sr-only` input) gets focus and keyboard events
+3. The `#visual-buffer` shows whatever text is rendered via `updateVisualBuffer()` / `renderMenuVisuals()`
+4. There is no backdrop behind `#visual-buffer` — so the Bible text bleeds through, creating contrast issues
+5. The core issues are that vault input menus lack contrast and sighted users get no visual feedback while typing
+Option B of stripping and reapplying the sr-only class is risky — it could cause the screen reader to re-announce the input, shift the cursor position, or interfere with JAWS since the input is exported as an ES module.
+Option A is cleaner: I'll mirror the keystrokes as a masked string in the visual buffer without touching the sr-only element, keeping the screen reader focused on the hidden input while showing sighted users a growing sequence of dots as they type.
+For the mask itself, instead of manually tracking each keystroke (which breaks on paste and multi-key deletions), I'll listen to the `input` event and derive the mask length directly from `searchInputEl.value.length` — this handles all edge cases automatically.
+For the menu backdrop, I'm adding a fixed overlay div with a dark semi-transparent background positioned behind the menu.
+Now I need to wire it all together: add the backdrop HTML and styling, update the visual buffer functions to show and hide it in sync with the menu, and hook up the input listener to refresh the mask whenever the search field changes. — nothing replaces it, which is why sighted users see a blank screen. I need to add `updateVisualBuffer` calls in the vault handler right after setting `isVaultInputMode = true`, then set up an input listener to track the masked key as it's being entered. I'll also need to clean up that listener when exiting or canceling. For the backdrop, I should add the element to the HTML, then modify both `updateVisualBuffer` and `renderMenuVisuals` to handle showing and hiding it.
+Now I'm locating the exact line numbers for `updateVisualBuffer` and `renderMenuVisuals` in keyboard.js to make precise edits.
+Now I have everything I need. Let me read the precise line ranges for surgical edits.
+Read keyboard.js, lines 38 to 87
+Thinking: Now I have everything I need. Let me plan the surgical diffs:
+## Architecture Decision
+**Option B (strip/reapply sr-only) — REJECTED.**
+Mutating the `sr-only` sentinel class at runtime races against JAWS/NVDA focus events and violates the focus-trap contract (H-001). The `searchInputEl` is a shared module export — touching its CSS state from inside a transient mode handler is unpredictable.
+**Option A (visual-buffer mirror) — ACCEPTED, with enhanced mask using `input` event.**
+The `vaultInputHandler` only fires on Enter/Escape. For character-by-character visual feedback, we add a second `input` event listener on `searchInputEl` that reads `searchInputEl.value.length` and rerenders the mask. 
+This approach handles paste operations, bulk deletions, and backspace naturally since the input listener responds to the actual DOM value rather than reconstructing from key events. Both listeners get torn down together in the same cleanup routine.
+## Diffs needed:
+### 1. `index.html`: Add `#menu-backdrop` div + CSS rule
+Creating a fixed overlay backdrop with high z-index and semi-transparent black background, positioned before the visual-buffer element in the DOM.
+### 2. `keyboard.js` — `updateVisualBuffer`: show/hide backdrop
+Modifying the function to toggle the backdrop visibility alongside the visual buffer, hiding both when there's no mode text and showing both when displaying menu content.
+### 3. `keyboard.js` — `renderMenuVisuals`: show backdrop
+Updating the menu rendering function...
+### 4. `keyboard.js` — vault input section: add `updateVisualBuffer` prompt + `input` event listener for mask
+Adding prompts to guide the user through the API key input flow, with the initial prompt appearing when vault mode activates and a live mask display updating as the user pastes the key. Still writing the vault handler... Setting up the vault input handler to capture the API key, then cleaning up the event listener and resetting the input state once the user confirms or cancels. I'm cleaning up the input handlers by removing the event listeners and resetting the state variables, then switching back to normal text input mode. Now I need to think through the backdrop implementation — it should be added to the menu rendering function since that handles all menu displays, and I'll set its z-index to 1999 to sit just below the visual buffer at 2000. I'm about to write out the specific CSS and DOM changes needed across the HTML and JavaScript files. Now I'm locating the exact strings to match for the file replacements. I need to find where `#visual-buffer` is defined in the HTML and insert the backdrop CSS before the closing style tag, then add the backdrop DOM element right before the visual-buffer div itself.
+Updating keyboard.js... Updating the menu backdrop visibility...
+Actually, I need to think through the structure more carefully. The `#menu-backdrop` element should be marked as `aria-hidden="true"` since it's purely decorative, and it needs to live outside the `#app-container` so it doesn't get wiped out if there's a catastrophic error that replaces the entire body innerHTML.
+For the z-index stacking, since both `#visual-buffer` and `#menu-backdrop` will use `position: fixed`, they'll establish their own stacking context relative to the viewport, so the DOM nesting doesn't actually matter — I just need to ensure the z-index values are set correctly. I'll place the backdrop right before the visual buffer in the DOM for clarity.
+Now I'm ready to write out the five surgical changes: the CSS rules, the DOM structure in index.html, and the three keyboard.js modifications.
+Now I have full context. Let me deliver the architectural analysis first, then the implementation.
+Architectural Analysis
+Option B — REJECTED
+Stripping and reapplying sr-only at runtime is the wrong pattern here: it creates a timing window where NVDA/JAWS may re-announce the input element mid-password-entry, the focus-trap exclusion list (H-001) depends on the mode flag not DOM class state, and the
+is a shared module export whose CSS sentinel should be immutable at runtime.
+Option A — ACCEPTED, with one enhancement
+The standard input event on
+(not key-by-key reconstruction via keydown) is the correct source for the mask. It naturally handles Ctrl+V paste, Ctrl+A+Delete, and backspace without fragile character counting. The
+already handles Enter/Escape; a separate vaultMaskHandler attached to input mirrors
+as bullet characters into the visual buffer, then is removed in the same cleanup block.
+Additional Improvement — Menu Backdrop
+A #menu-backdrop &lt;div&gt; (position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1999) sits one z-level behind #visual-buffer (z-index: 2000).
+and
+toggle it in sync with the buffer — a single show/hide pair, no new mode flags, no screen-reader surface. Addresses contrast for all menu states simultaneously.
+D-006 footnote
+The heartbeat interval's 220 Hz note was already replaced by the v69.4.1 Lifeboat
+call in your current code — confirmed present, untouched below.
+Now the diffs:
+Replacing 39 lines with 64 lines in index.html, keyboard.js
 ```
 ```
 ```
 ```
-All 5 surgical edits applied.
-is now at brief_version 1.3:
-**§1 / §11**: App version → `v69.4.1`, brief version → `1.3`, active task and last-completed updated.
-**§12**: R-5 marked `[DEFERRED]`; new `R-5.1` inserted before R-6.
-**§14**: New session log entry prepended for `S-2026-05-08`.
+```
+```
+All 5 diffs applied. Here's a summary of what changed and why:
+**
+** — 2 changes
+**CSS** (`#menu-backdrop`): `position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1999; display: none`. Sits one z-level below `#visual-buffer` (2000), `aria-hidden`, purely decorative.
+**DOM**: `<div>` inserted immediately before `#visual-buffer`.
+**
+</div>
+** — 3 changes
+**
+**: reads #menu-backdrop and shows/hides it in sync with #visual-buffer. One lookup per call — no module-level reference needed since backdrop is only needed when buffer is needed.
+2. **
+**: same backdrop show on every menu render (covers all menu states: Options, AutoPlay, Library, etc.).
+3. Vault input section: 
+Calls
+immediately on entry — the backdrop fires automatically via the updated
+.
+Adds
+on the input event (handles paste/backspace/Ctrl+V correctly, unlike keydown), rendering •.repeat(length) into the buffer.
+Removes
+in the same cleanup block as
+. No leak.
+All screen reader announcements, audio cues, and the v69.4.1 Lifeboat heartbeat are untouched.
