@@ -1,4 +1,4 @@
-brief_version: 1.2
+brief_version: 1.3
 
 ## §0 AGENT DIRECTIVES
 - Read this file end-to-end on session boot. Recite §11 in first reply.
@@ -18,8 +18,8 @@ brief_version: 1.2
 - Host: GitHub Pages, www.accessible-bible.org. License: MIT.
 - Stack: static ES modules, no bundler, IndexedDB, Web Speech API, AudioContext, importmap.
 - Active cycle: Update Cycle 2 — JIT Study Plan pipeline.
-- App version: v66.1. Brief version: 1.2.
-- Active task: R-5 Cycle 2 close — hand validated plan to autoplay engine.
+- App version: v69.4.1. Brief version: 1.3.
+- Active task: Visual accessibility overhaul of the Options Menu and Vault Input (v69.5).
 - IndexedDB: BibleStudyDB v7. apiKeys + studyPlans stores added; user stores preserved.
 - BYOK: user supplies Gemini key, stored locally; no hosted key, no telemetry.
 - gemini.md is the engine rulebook; do not contradict it.
@@ -201,18 +201,19 @@ brief_version: 1.2
 - Watchdog Directive — gemini.md, the operational rulebook for engine behavior.
 
 ## §11 CURRENT STATUS
-- Active task: R-5 Cycle 2 close — hand validated plan to autoplay engine.
-- App version: v66.1. Brief version: 1.2.
-- Last completed: R-3 Vault UX (Options menu Save/Replace/Clear + redacted readout) + R-4 orchestrator wiring (vault, planCache read-through, signal propagation, manifestId param). JIT pipeline now functional end-to-end for the first time.
+- Active task: Visual accessibility overhaul of the Options Menu and Vault Input (v69.5).
+- App version: v69.4.1. Brief version: 1.3.
+- Last completed: v69.2 Study Library (Recent/Alpha/Favorites views, 'K' pinning, LRU eviction protection) and v69.4.1 JIT Audio Heartbeat hotfix (800Hz Lifeboat echo).
 - Blockers: none.
-- Awaiting: R-5 diff (autoplay engine plan handoff).
+- Awaiting: R-5.1 diff (Options Menu + Vault Input visual accessibility).
 
 ## §12 ROADMAP
 - [x] R-1 Build `jit/vault.js` (getKey/setKey/clearKey/redactedDisplay/hasKey).
 - [x] R-2 Build `jit/planCache.js` (buildCacheKey/get/put/evictIfOverCap).
 - [x] R-3 Wire vault into Options menu UX (Save/Replace/Clear key, redacted readout).
 - [x] R-4 Wire orchestrator → vault (pre-call) and planCache (read-through). Includes signal propagation, GEMINI_MODEL config promotion, manifestId parameter.
-- [ ] R-5 Cycle 2 close: Task 2.7 engine integration — hand validated plan to autoplay.
+- [ ] R-5 Cycle 2 close: Task 2.7 engine integration — hand validated plan to autoplay. [DEFERRED]
+- [ ] R-5.1 Cycle 2 Detour: Fix visual accessibility gaps in the Options Menu and Vault Input for sighted users.
 - [ ] R-6 Cycle 3: post-launch hardening — encryption envelope for vault.
 - [ ] R-7 Cycle 3: multi-provider abstraction (Anthropic, OpenAI).
 - [ ] R-8 Cycle 4: mobile accessibility strategy.
@@ -229,6 +230,7 @@ brief_version: 1.2
 - OQ-8 Cache re-validation — RESOLVED: PlanValidator re-runs on every `get()`; failure evicts the record and returns null. (R-2)
 
 ## §14 SESSION LOG
+- S-2026-05-08 v69.2 + v69.4.1 shipped: Advanced Library Management implemented with virtual views, first-letter navigation, and pinning immunity. JIT heartbeat upgraded to 800Hz 'Lifeboat' using `playEcho` utility. App bumped to v69.4.1. Brief bumped to 1.3.
 - S-2026-05-04 R-3 + R-4 shipped: Options menu now exposes Save/Replace/Clear Gemini Key with redacted readout (`isVaultInputMode` + B1 listener + password-type input toggle). Orchestrator wired to vault + planCache; cache-before-vault for offline replay; manifestId now a parameter; GEMINI_MODEL promoted to config.js; AbortSignal propagated through GeminiProvider via Promise.race. Pre-R-4 signature mismatch fixed. App bumped v66.0 → v66.1.
 - S-2026-05-04 R-1 + R-2 shipped: `jit/vault.js` (headless, no UI coupling, plaintext + reserved keyEnvelope) and `jit/planCache.js` (re-validate on read, lazy LRU on get + put, console.warn on poisoned records). Spoke contracts honored end-to-end.
 - S-2026-05-04 v1.0 brief locked: Hub-and-Spoke architecture spec adopted; gemini.md/.changelog.md/.roadmap.txt ingested; project_brief.md v1.0 cut.

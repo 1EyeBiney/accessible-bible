@@ -8,10 +8,13 @@
 3. Generate the Key
 • Now, navigate back to the main heading that says "Get API key" or "API Keys".  
 • Use your Tab key to find the "Create API key" button and press Enter.  
-View source details for citation from DataCamp. Opens side panel.
-• 
-Because you already created a project, the interface should now allow you to simply select that project (or it may default to it) and generate the key without wrestling with the complicated "Create New" combo box.
+• Because you already created a project, the interface should now allow you to simply select that project (or it may default to it) and generate the key without wrestling with the complicated "Create New" combo box.
 4. Copy the Key
 • A dialog will appear containing your new key (a long string of random letters and numbers).
 • Use your Tab key to move past the text field containing the key.
 • The very next tab stop is the copy button. It might read as "Copy API key to clipboard", an unlabeled graphic, or simply "Button". Press Enter on it to copy the key.
+
+Return to Accessible Bible and use O to open the Options menu.
+Navigate down to the option to add Gemini key and hit enter on this option.
+You can use Control + V to paste your API key from your clipboard into this field in the Options menu.
+You should be now able to use G and generate your own study plans
