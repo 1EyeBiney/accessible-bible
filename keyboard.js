@@ -39,10 +39,13 @@ const visualBuffer = document.getElementById('visual-buffer');
 
 export function updateVisualBuffer(modeText, valueText) {
     if (!visualBuffer) return;
+    const menuBackdrop = document.getElementById('menu-backdrop');
     if (!modeText) {
         visualBuffer.style.display = 'none';
+        if (menuBackdrop) menuBackdrop.style.display = 'none';
     } else {
         visualBuffer.style.display = 'block';
+        if (menuBackdrop) menuBackdrop.style.display = 'block';
         visualBuffer.textContent = modeText + (valueText ? ": " + valueText : "...");
     }
 }
@@ -51,6 +54,8 @@ export function renderMenuVisuals(title, items, currentIndex) {
     const visualBuffer = document.getElementById('visual-buffer');
     if (!visualBuffer) return;
     visualBuffer.style.display = 'block';
+    const menuBackdrop = document.getElementById('menu-backdrop');
+    if (menuBackdrop) menuBackdrop.style.display = 'block';
 
     let html = `<div style="text-transform: uppercase; letter-spacing: 2px;">${title}</div>`;
     html += `<hr style="border-color: var(--accent-color); margin: 15px 0;">`;
@@ -1191,8 +1196,18 @@ export function handleInput(event) {
                 searchInputEl.value = '';
                 searchInputEl.placeholder = 'Paste Gemini API key, then Enter';
                 searchInputEl.type = 'password';
+                updateVisualBuffer("SAVE GEMINI API KEY", "Paste key, then press Enter. Esc to cancel");
                 speak("Enter Gemini API key. Paste then press Enter, or Escape to cancel.");
                 setTimeout(() => searchInputEl.focus(), 10);
+
+                // Mirrors typed/pasted length as bullet characters so sighted users
+                // see live progress without revealing the key. Uses 'input' (not 'keydown')
+                // so paste, backspace, and Ctrl+A+Delete are all handled correctly.
+                const vaultMaskHandler = () => {
+                    const len = searchInputEl.value.length;
+                    updateVisualBuffer("SAVE GEMINI API KEY", len ? '\u2022'.repeat(len) : "Paste key, then press Enter. Esc to cancel");
+                };
+                searchInputEl.addEventListener('input', vaultMaskHandler);
 
                 const vaultInputHandler = async (e) => {
                     if (e.key !== 'Enter' && e.key !== 'Escape') return;
@@ -1201,6 +1216,7 @@ export function handleInput(event) {
                     searchInputEl.value = '';
                     searchInputEl.placeholder = '';
                     searchInputEl.type = 'text';
+                    searchInputEl.removeEventListener('input', vaultMaskHandler);
                     searchInputEl.removeEventListener('keydown', vaultInputHandler);
                     activeInputHandler = null;
                     isVaultInputMode = false;
